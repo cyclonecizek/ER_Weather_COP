@@ -1,0 +1,7 @@
+{
+  "name": "er-weather-cop-data",
+  "private": true,
+  "type": "module",
+  "scripts": { "deploy": "wrangler deploy", "dev": "wrangler dev --test-scheduled", "test": "node --test tests/*.test.mjs" },
+  "devDependencies": { "wrangler": "^4.0.0" }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "er-weather-cop-data",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-10-16",
+  "workers_dev": true,
+  "triggers": { "crons": ["* * * * *"] },
+  "durable_objects": {
+    "bindings": [{ "name": "OBSERVATIONS", "class_name": "ObservationStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ObservationStore"] }],
+  "vars": {
+    "SNAPSHOT_URL": "https://raw.githubusercontent.com/cyclonecizek/ER_Weather_COP/main/dist/data/latest.json",
+    "ALLOWED_ORIGINS": "https://cyclonecizek.github.io,https://er-weather-cop.bciz392.chatgpt.site"
+  },
+  "observability": { "enabled": true }
+}

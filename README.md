@@ -129,3 +129,13 @@ Tests additionally cover thermodynamic-only stations, surface height pairing,
 new-settings migration, marker size limits, radar transparency, and projection
 sampling orientation. A real October 16, 2026 composite was decoded and visually
 inspected as a standalone image. Browser visual QA remains unavailable here.
+
+## One-minute Cloudflare collection
+
+See [Cloudflare setup](CLOUDFLARE_SETUP.md) for the exact Git-connected
+deployment steps. `cloudflare-worker/` is a separate Worker project that
+polls WINDS, EFMs, CC, and CG every minute and caches the results in an
+automatically provisioned SQLite-backed Durable Object. Radar and profilers
+continue to use the five-minute GitHub snapshot as their separate baseline.
+Set the Worker URL under Display settings > Live data connection. The GitHub
+webpage URL stays the same. No Cloudflare account tokens are placed in the repo.
