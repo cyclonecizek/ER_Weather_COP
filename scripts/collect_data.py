@@ -96,7 +96,11 @@ def profilers(now):
          'source':meta.get('source','Published profiler placefile'),
          'fallback_reason':meta.get('api_fallback_reason'),'upstream_generated_at':meta['generated_utc']}
 
-FETCHERS={'winds':winds,'efm':efm,'cc':lambda now:lightning('c2c',now),'cg':lambda now:lightning('c2g',now),'profilers':profilers}
+def radar(now):
+ from mrms import fetch
+ return fetch(now,get)
+
+FETCHERS={'radar':radar,'winds':winds,'efm':efm,'cc':lambda now:lightning('c2c',now),'cg':lambda now:lightning('c2g',now),'profilers':profilers}
 
 def collect(previous=None,fetchers=None,now=None):
  previous=previous or {}

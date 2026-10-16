@@ -81,10 +81,51 @@ triggers Pages deployment after successful updates. The private Site's manifest
 is `.openai/hosting.json`. Static configuration requires no server secrets.
 
 Leaflet 1.9.4 is included under its BSD-2-Clause license in `dist/vendor/LICENSE`.
-Basemap sources are CARTO/OpenStreetMap and Esri World Imagery. The page
+Basemap sources are OpenStreetMap (without a key), CARTO (when a key is supplied), and Esri World Imagery. The page
 uses Manrope and DM Sans with system-font fallbacks.
 
 Tests cover height and sensor-side selection, missing wind values, EFM threshold
 boundaries, CC time windows, invalid settings, and partial collector failures.
 Actual basemap rendering and interactions need visual confirmation in a browser;
 the implementation environment did not expose the supported browser QA tool.
+
+## Station labels, plot size, and MRMS
+
+The WINDS layer has independent temperature (upper-left, °F), dew point
+(lower-left, °F), and RH (lower-right, %) toggles. At Surface, thermodynamics
+use a sensor at or below 10 ft independently of the wind sensor at or below
+20 ft; each variable's actual height is identified in the inspector. Exact
+height selections do not silently substitute a different height. A station
+with valid requested thermodynamics can display even when its wind is missing.
+
+Display settings include separate 60–220% size controls for wind station plots
+and field mill circles. Defaults are larger than the original: 130% and 115%.
+Temperature/dew point/RH toggles and sizes persist per browser.
+
+CARTO currently requires a CARTO Basemaps API key, including for its free tier:
+https://www.carto.com/basemaps/apikey/index.html
+An optional browser key can be entered under Display settings > Basemap access.
+It is sent in tile URLs and should be restricted to the intended website hosts.
+Without a key, dark and light use standard OpenStreetMap tiles with normal
+browser caching; dark mode applies a client-side visual filter. Attribution
+remains visible. No unauthenticated CARTO requests are made.
+
+The MRMS layer is NOAA's `MergedReflectivityQCComposite`, not base reflectivity
+or a lowest-elevation substitute. Source:
+https://mrms.ncep.noaa.gov/2D/MergedReflectivityQCComposite/
+Product table:
+https://www.nssl.noaa.gov/projects/mrms/operational/tables.php
+
+The scheduled collector downloads the latest compressed GRIB2, uses ecCodes
+to decode a regional crop (26–31°N, 84–77°W), and renders a transparent PNG
+on a Web Mercator sampling grid for correct Leaflet image alignment. The image
+is embedded in the JSON snapshot so image and observation time stay together.
+The display threshold is 5 dBZ; missing/no-echo codes are transparent. A dBZ
+legend and opacity slider are included. The radar is hidden when older than
+20 minutes. The snapshot updates on the existing five-minute schedule, not on
+every native MRMS two-minute cycle. No MRMS API key is required.
+
+Tests additionally cover thermodynamic-only stations, surface height pairing,
+new-settings migration, marker size limits, radar transparency, and projection
+sampling orientation. A real October 16, 2026 composite was decoded and visually
+inspected as a standalone image. Browser visual QA remains unavailable here.
