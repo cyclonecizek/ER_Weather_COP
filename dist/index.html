@@ -4,7 +4,7 @@
 <header class="topbar">
  <a class="brand" href="./" aria-label="Eastern Range Weather COP home"><span class="brandmark"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="13"/><path d="M20 1v10M20 29v10M1 20h10M29 20h10M8 32l24-24"/><circle cx="20" cy="20" r="4"/></svg></span><span><span class="brand-title">EASTERN RANGE <span>WEATHER</span></span><span class="brand-sub">COMMON OPERATING PICTURE</span></span></a>
  <div class="top-center"><span class="status-dot"></span> OBSERVATION NETWORK <span class="divider"></span><span id="networkStatus">Connecting</span></div>
- <div class="top-actions"><span class="clock"><small>UTC</small><strong id="clock">--:--:--</strong><span id="clockDate"></span></span><button class="icon-button" id="settingsButton" title="Display settings" aria-label="Display settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button></div>
+ <div class="top-actions"><button id="windAlertsButton" class="wind-alert-button">Wind alerts</button><span class="clock"><small>UTC</small><strong id="clock">--:--:--</strong><span id="clockDate"></span></span><button class="icon-button" id="settingsButton" title="Display settings" aria-label="Display settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button></div>
 </header>
 <div class="workspace">
  <aside class="sidebar" id="sidebar">
@@ -30,6 +30,7 @@
  <main class="map-area"><div id="map" aria-label="Interactive Eastern Range weather map"></div>
   <div class="map-top"><div class="map-title"><span class="status-dot"></span><span>EASTERN RANGE</span><span class="map-title-sub">28.5° N / 80.6° W</span></div><div class="basemaps" role="group" aria-label="Basemap"><button data-basemap="dark" class="active">Dark</button><button data-basemap="light">Light</button><button data-basemap="satellite">Satellite</button></div></div>
   <div class="map-tools"><button id="homeView" class="icon-button" title="Reset Cape view" aria-label="Reset Cape view"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/></svg></button><button id="fitStations" class="icon-button" title="Fit visible stations" aria-label="Fit visible stations"><svg viewBox="0 0 24 24"><path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6"/></svg></button></div>
+  <button id="windAlertPanel" class="wind-alert-panel" hidden aria-label="Open wind alerts"><span>WIND MONITOR</span><span id="windAlertPanelText" aria-live="polite"></span></button>
   <div class="map-alert" id="mapAlert" role="status" hidden></div>
   <div class="map-bottom"><div class="map-context"><span class="eyebrow">OBSERVATION LAYERS</span><strong id="activeLayers">4 layers visible</strong><span id="dataTimestamp">Connecting to live observations…</span></div><button class="legend-toggle" id="legendToggle" aria-expanded="true">Map legend <span>⌄</span></button></div>
   <div class="legend" id="legend"><div class="legend-head">MAP LEGEND<span id="legendHeight">54 FT WINDS</span></div><div id="legendContent"></div></div>
@@ -47,5 +48,16 @@
  <div class="settings-section wind-setting"><div><h3>Wind barbs</h3><p>Speeds are in knots. Height selection is in feet AGL.</p></div><input type="color" id="settingWindColor" aria-label="Wind barb color"></div>
  <p class="settings-error" id="settingsError" role="alert"></p><div class="settings-actions"><button type="button" id="resetSettings" class="secondary-button">Restore defaults</button><button class="primary-button" type="submit">Apply settings</button></div>
 </form></dialog>
+<dialog id="windAlertsDialog" aria-labelledby="windAlertsTitle"><div class="settings-head"><div><span class="eyebrow">YOUR WIND WATCH</span><h2 id="windAlertsTitle">Tower wind alerts</h2></div><button class="close-button" id="closeWindAlerts" aria-label="Close wind alerts">×</button></div>
+<p class="settings-intro">Rules are saved in this browser and evaluated while this dashboard is open. Alerts use available sensors at or below your height limit, independently of map layers and displayed height. Browser suspension and data publishing can delay alerts. No email or background alerts.</p>
+<div class="wind-alert-toolbar"><span id="windAlertSummary" role="status"></span><button type="button" id="alertSound" class="secondary-button">Enable sound</button></div><p class="wind-alert-note">Sound must be enabled each session. It plays once when a rule first meets its threshold and rearms after fresh readings fall below it.</p>
+<div id="windAlertRules"></div>
+<form id="windAlertForm" class="settings-section"><h3 id="alertFormTitle">New alert rule</h3>
+<label class="alert-field">Rule name<input id="alertRuleName" maxlength="80" placeholder="Launch pad wind watch" required></label>
+<label class="alert-field">Wind measurement<select id="alertMetric"><option value="peak_spd_1min">Peak · 1 minute</option><option value="avg_spd_1min">Sustained · 1-minute mean</option><option value="peak_spd_10min">Peak · 10 minutes</option></select></label>
+<div class="threshold-grid"><label>At or above (kt)<input id="alertThreshold" type="number" min="0.1" max="300" step="0.1" value="35" required></label><label>At or below (ft AGL)<input id="alertHeight" type="number" min="0.1" max="2000" step="0.1" value="54" required></label></div>
+<fieldset class="alert-tower-fieldset"><legend>Towers to monitor</legend><div class="wind-alert-actions"><button type="button" id="alertSelectAll">Select all</button><button type="button" id="alertSelectNone">Clear selection</button></div><div id="alertTowers" class="alert-towers"></div></fieldset>
+<p class="wind-alert-note">Sustained uses the 1-minute mean. Both speed and height limits include equality. Sensors older than 5 minutes cannot trigger or clear an alert. Monitoring uses the latest report at each sensor height and its prevailing side when available.</p>
+<p id="alertFormError" class="settings-error" role="alert"></p><div class="settings-actions"><button type="button" id="alertCancelEdit" class="secondary-button">Clear form</button><button id="alertSave" class="primary-button" type="submit">Add rule</button></div></form></dialog>
 <script src="./vendor/leaflet.js"></script><script type="module" src="./app.mjs"></script>
 </body></html>

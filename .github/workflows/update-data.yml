@@ -33,7 +33,7 @@ jobs:
       - name: Test data and display logic
         run: |
           python -m unittest discover -s tests
-          node --test tests/core.test.mjs
+          node --test tests/*.test.mjs
           node --test cloudflare-worker/tests/*.test.mjs
           node --check dist/app.mjs
       - name: Fetch observations

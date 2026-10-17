@@ -139,3 +139,28 @@ automatically provisioned SQLite-backed Durable Object. Radar and profilers
 continue to use the five-minute GitHub snapshot as their separate baseline.
 Set the Worker URL under Display settings > Live data connection. The GitHub
 webpage URL stays the same. No Cloudflare account tokens are placed in the repo.
+
+## Configurable tower wind alerts
+
+Open **Wind alerts** in the dashboard header. Add named rules with selected towers,
+1-minute sustained mean, 1-minute peak, or 10-minute peak, a threshold in knots,
+and a maximum sensor height in feet AGL. Speed comparison is `>=`; height is `<=`.
+Create separate peak and sustained rules to monitor either condition. Rules can
+be edited, paused, deleted, and acknowledged, and persist in this browser.
+Launch pad sides (for example LC39ANE/NW/SE) are grouped under the pad; numeric
+tower sides are grouped under their tower number. For each height, the newest
+observation is used, preferring the prevailing side when timestamps match.
+
+The alert panel lists every matching sensor with its value, height, and UTC time.
+Click a reading to locate it on the map. Alerts evaluate independently of map
+layer visibility and the map's selected height. Optional sound is enabled by a
+user click each session and plays once per rule episode. Acknowledgement keeps
+the alert visible. Fresh readings below threshold rearm the rule; missing,
+invalid, source-error, or observations older than five minutes show data gaps
+and do not clear an existing episode. Coverage refers to sensors present in the
+feed, not a complete inventory of every installed instrument.
+
+Monitoring requires an open dashboard. Browser suspension and collection/Pages
+publishing latency can delay evaluation; this is not a background, email, or
+push notification service. Run `node --test tests/*.test.mjs` to check alert and
+display logic.
