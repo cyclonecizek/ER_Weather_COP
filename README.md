@@ -164,3 +164,34 @@ Monitoring requires an open dashboard. Browser suspension and collection/Pages
 publishing latency can delay evaluation; this is not a background, email, or
 push notification service. Run `node --test tests/*.test.mjs` to check alert and
 display logic.
+
+## Lightning rings and hold timers
+
+Open **Lightning watches** in the layers sidebar. Name each watch and choose a
+WINDS tower / launch site as its starting point, click a center on the map, or
+enter latitude and longitude. Longitude is negative in Florida. Set the radius
+in nautical miles (up to 100 nm), hold time in whole minutes (1–60), and CG, CC,
+or both detection types. Coordinates can be adjusted to the exact site. Add
+multiple watches with the same coordinates for concentric rings. Each watch has
+its own radius, hold time, and quiet-state ring color. Watches can be edited,
+paused, deleted, located on the map, and have their rings hidden independently
+of monitoring. Up to 30 rules persist locally in the browser.
+
+Distances use a great-circle calculation and include the radius boundary. Watches
+use detection coordinates directly, independently of CC density cells, layer
+visibility, and the selected lightning trail. The newest matching event starts
+or restarts the hold, based on its event timestamp rather than ingestion time.
+Red rings indicate an active hold; amber dashed rings indicate data gaps; gray
+dashed rings indicate paused rules. Sidebar cards and the map watch panel show
+hold countdowns. Ring tooltips identify the name, radius, type, and hold time.
+
+Optional sound must be enabled each session. It plays on activation and for a
+newer event that resets the hold. Acknowledgement silences the current event;
+a newer matching detection rearms it. Known events survive missing rows in a
+subsequent snapshot while the page remains open. A hold cannot be released until
+a successful query covers its end time. Failed, malformed, incomplete-history,
+or stale (>5 minutes) feeds show coverage gaps. “No recent detections” describes
+available records, not an operational GO decision or guaranteed sensor coverage.
+The current collector retains 60 minutes of records, so longer holds are not
+supported. These are open-page alerts, not background or email notifications;
+browser suspension, data collection, and Pages deployment can delay evaluation.
