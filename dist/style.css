@@ -20,3 +20,6 @@
 
 /* The legend header remains available when its content is collapsed. */
 .legend .legend-head{width:100%;border:0;background:transparent;padding:0;min-height:30px;cursor:pointer;text-align:left;gap:8px;align-items:center}.legend-head .legend-title{display:inline;color:#b5c9df;font-size:inherit;letter-spacing:1px;white-space:nowrap}.legend-head .legend-chevron{display:inline;color:#a1dec3;font-size:18px;line-height:1;margin-left:auto}.legend.collapsed .legend-head{margin-bottom:0}.legend .legend-head:hover .legend-title{color:#fff}.legend .legend-head:focus-visible{outline:2px solid #a1dec3;outline-offset:5px;border-radius:3px}
+
+/* Native details keeps the legend collapsible independently of script state. */
+.legend>summary.legend-head{list-style:none;display:flex;user-select:none}.legend>summary.legend-head::-webkit-details-marker{display:none}.legend:not([open])>.legend-head{margin-bottom:0}.legend>summary.legend-head::marker{content:""}
