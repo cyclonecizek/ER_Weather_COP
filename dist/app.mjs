@@ -1,3 +1,4 @@
+import {SHARED_CARTO_KEY} from './basemap-config.mjs?v=shared-map-20261019';
 import {BARNES,prepareStations,analyzeBarnes} from './barnes.mjs';
 import {validReplay,replayBounds,replayFrame,advanceFrame} from './replay.mjs';
 import {initLightningWatches} from './lightning-ui.mjs';
@@ -14,12 +15,13 @@ let data=null,selected=null,refreshing=false,refreshAt=Date.now()+60000,lastRefr
 const map=L.map('map',{zoomControl:false,preferCanvas:true,minZoom:5,maxZoom:18}).setView([28.555,-80.63],10);
 L.control.zoom({position:'topright'}).addTo(map);
 L.control.scale({position:'bottomleft',imperial:true,metric:true,maxWidth:110}).addTo(map);
+function cartoKey(){return settings.cartoKey.trim() || SHARED_CARTO_KEY;}
 function makeBases(){
  const osm={attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',maxZoom:19,className:'osm-base'};
  const carto={attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',maxZoom:20};
- const key=encodeURIComponent(settings.cartoKey.trim());
- return {dark:settings.cartoKey?L.tileLayer('https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key='+key,carto):L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',osm),
- light:settings.cartoKey?L.tileLayer('https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key='+key,carto):L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',osm),
+ const key=encodeURIComponent(cartoKey());
+ return {dark:cartoKey()?L.tileLayer('https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key='+key,carto):L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',osm),
+ light:cartoKey()?L.tileLayer('https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key='+key,carto):L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',osm),
  satellite:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles &copy; Esri, Maxar, Earthstar Geographics',maxZoom:18})};
 }
 let bases=makeBases();
@@ -27,7 +29,7 @@ let activeBase;
 const groups={};for(const key of Object.keys(LABELS)){map.createPane(key);map.getPane(key).style.zIndex=({radar:390,barnes:400,cc:410,cg:420,winds:430,efm:440,profilers:450})[key];groups[key]=L.layerGroup().addTo(map);}
 let stationIndex=[];
 function save(){try{localStorage.setItem('er-cop-settings',JSON.stringify(settings));}catch{}}
-function setBase(name){if(!bases[name])name='dark';if(activeBase)map.removeLayer(activeBase);activeBase=bases[name].addTo(map);settings.basemap=name;document.querySelectorAll('[data-basemap]').forEach(b=>b.classList.toggle('active',b.dataset.basemap===name));document.body.classList.toggle('light-map',name==='light');document.body.classList.toggle('osm-dark',name==='dark'&&!settings.cartoKey);document.querySelectorAll('[data-basemap]').forEach(b=>b.title=b.dataset.basemap==='satellite'?'Esri imagery':settings.cartoKey?'CARTO basemap':'OpenStreetMap · no API key required');save();}
+function setBase(name){if(!bases[name])name='dark';if(activeBase)map.removeLayer(activeBase);activeBase=bases[name].addTo(map);settings.basemap=name;document.querySelectorAll('[data-basemap]').forEach(b=>b.classList.toggle('active',b.dataset.basemap===name));document.body.classList.toggle('light-map',name==='light');document.body.classList.toggle('osm-dark',name==='dark'&&!cartoKey());document.querySelectorAll('[data-basemap]').forEach(b=>b.title=b.dataset.basemap==='satellite'?'Esri imagery':cartoKey()?'CARTO basemap':'OpenStreetMap · no API key required');save();}
 setBase(settings.basemap);
 let tileFailures=0;Object.values(bases).forEach(layer=>layer.on('tileerror',()=>{if(++tileFailures>4){$('mapAlert').hidden=false;$('mapAlert').textContent='Basemap tiles could not load. Observation markers remain available; try a different basemap.';}}));
 function liveFeed(name){return data?.feeds?.[name]||{rows:[],status:'loading'};}
