@@ -195,3 +195,36 @@ available records, not an operational GO decision or guaranteed sensor coverage.
 The current collector retains 60 minutes of records, so longer holds are not
 supported. These are open-page alerts, not background or email notifications;
 browser suspension, data collection, and Pages deployment can delay evaluation.
+
+## Previous-hour replay
+
+Use the bottom playback bar: **Play / Pause**, previous/next minute buttons,
+the minute slider, 1/2/4 frames per second, and **Return to live**. The loop spans
+61 minute positions (the latest published minute and its preceding 60 minutes),
+wraps automatically, and labels the selected UTC time. Live fetching continues
+while playing or paused; updated history retains the chosen absolute time until
+it falls outside the rolling window. Ring and wind alerts always evaluate the
+live snapshot, and the data-status sidebar remains labeled as live.
+
+`scripts/collect_replay.py` runs after the live collector in the existing cron
+workflow. Its separate `dist/data/replay/index.json` contains timestamped WINDS
+and EFM observations (65-minute retention), lightning history (125 minutes so a
+60-minute trail is available even at the oldest replay frame), and observed
+profiler snapshots retained as they become available. Sensor history is fetched
+incrementally with a five-minute overlap, deduplicated by source record ID, and
+keeps original timestamps. Field mill coordinate fallbacks match the live feed.
+
+MRMS replay downloads the timestamped QC composite files listed in NOAA's
+archive, caches PNGs under `dist/data/replay/radar/`, and removes frames older
+than 65 minutes. Historical radar is rendered at 700 × 560 pixels over the same
+regional bounds; browsers preload and reuse the images for playback. Current
+radar keeps its existing resolution. The replay index is loaded on first Play;
+while used, it refreshes alongside live observations.
+
+Frames select only observations at or before the selected time. Wind and EFM
+readings carry forward at most two minutes, radar at most five minutes, and
+profiler profiles at most twenty minutes. Missing or failed-source coverage is
+listed in the replay bar; future/live radar is never substituted for missing
+historical radar. Profiler history begins with snapshots observed by this
+collector, so it can have gaps until enough archive updates have been retained.
+Map layer, height, colors, gust, and thermodynamic settings continue to apply.
