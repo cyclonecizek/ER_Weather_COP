@@ -1,3 +1,4 @@
+import {BARNES,prepareStations,analyzeBarnes} from './barnes.mjs';
 import {validReplay,replayBounds,replayFrame,advanceFrame} from './replay.mjs';
 import {initLightningWatches} from './lightning-ui.mjs';
 import {initWindAlerts} from './alerts-ui.mjs';
@@ -5,7 +6,7 @@ import {DEFAULTS,clean,windSite,selectWinds,selectWindPlots,efmCategory,ccCells,
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(x,n=0)=>clean(x)===null?'—':Number(x).toFixed(n);
-const LABELS={winds:'WINDS towers',efm:'Electric field mills',cg:'MERLIN CG',cc:'MERLIN CC',profilers:'Wind profilers',radar:'MRMS composite'};
+const LABELS={winds:'WINDS towers',efm:'Electric field mills',cg:'MERLIN CG',cc:'MERLIN CC',profilers:'Wind profilers',radar:'MRMS composite',barnes:'Barnes convergence / divergence'};
 let settings;try{settings=settingsFrom(JSON.parse(localStorage.getItem('er-cop-settings')||'null'));}catch{settings=settingsFrom(null);}
 const replayImages=new Map(),replayImageFailures=new Set();
 let replayTime=null,replayHistory=null,replayUrl='',replayPlaying=false,replayTimer=null,replayLoading=false,displaySnapshot=null;
@@ -23,7 +24,7 @@ function makeBases(){
 }
 let bases=makeBases();
 let activeBase;
-const groups={};for(const key of Object.keys(LABELS)){map.createPane(key);map.getPane(key).style.zIndex=({radar:390,cc:410,cg:420,winds:430,efm:440,profilers:450})[key];groups[key]=L.layerGroup().addTo(map);}
+const groups={};for(const key of Object.keys(LABELS)){map.createPane(key);map.getPane(key).style.zIndex=({radar:390,barnes:400,cc:410,cg:420,winds:430,efm:440,profilers:450})[key];groups[key]=L.layerGroup().addTo(map);}
 let stationIndex=[];
 function save(){try{localStorage.setItem('er-cop-settings',JSON.stringify(settings));}catch{}}
 function setBase(name){if(!bases[name])name='dark';if(activeBase)map.removeLayer(activeBase);activeBase=bases[name].addTo(map);settings.basemap=name;document.querySelectorAll('[data-basemap]').forEach(b=>b.classList.toggle('active',b.dataset.basemap===name));document.body.classList.toggle('light-map',name==='light');document.body.classList.toggle('osm-dark',name==='dark'&&!settings.cartoKey);document.querySelectorAll('[data-basemap]').forEach(b=>b.title=b.dataset.basemap==='satellite'?'Esri imagery':settings.cartoKey?'CARTO basemap':'OpenStreetMap · no API key required');save();}
@@ -60,7 +61,7 @@ const lightningWatches=initLightningWatches({
  }
 });
 const windAlerts=initWindAlerts({onFocus:r=>{goLive();settings.layers.winds=true;settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);const plot=selectWindPlots(feed('winds').rows,settings.height,settings.thermo).find(x=>x.site===windSite(r.tower));if(plot)inspect('winds',plot);}});
-function render(){if(!data)return;displaySnapshot=replayTime===null?data:replayFrame(replayHistory,replayTime,settings.trail,replayUrl);if(replayTime!==null&&replayImageFailures.has(displaySnapshot.feeds.radar.image_data)){displaySnapshot.feeds.radar.image_data=null;if(!displaySnapshot.gaps.includes('radar'))displaySnapshot.gaps.push('radar');}lightningWatches.update(data,snapshotFailure);windAlerts.update(snapshotFailure?{...liveFeed('winds'),status:'error'}:liveFeed('winds'));for(const g of Object.values(groups))g.clearLayers();stationIndex=[];const now=mapTime();const winds=selectWindPlots(feed('winds').rows,settings.height,settings.thermo);$('count-winds').textContent=`${winds.length} sites · ${clockLabel(feed('winds').observed_at)}`;
+function render(){if(!data)return;displaySnapshot=replayTime===null?data:replayFrame(replayHistory,replayTime,settings.trail,replayUrl);if(replayTime!==null&&replayImageFailures.has(displaySnapshot.feeds.radar.image_data)){displaySnapshot.feeds.radar.image_data=null;if(!displaySnapshot.gaps.includes('radar'))displaySnapshot.gaps.push('radar');}lightningWatches.update(data,snapshotFailure);windAlerts.update(snapshotFailure?{...liveFeed('winds'),status:'error'}:liveFeed('winds'));for(const g of Object.values(groups))g.clearLayers();stationIndex=[];const now=mapTime();const winds=selectWindPlots(feed('winds').rows,settings.height,settings.thermo);renderBarnes();$('count-winds').textContent=`${winds.length} sites · ${clockLabel(feed('winds').observed_at)}`;
  for(const r of winds){
   stationIndex.push({name:r.site,kind:'winds',r,lat:r.lat,lon:r.lon});if(!settings.layers.winds)continue;
   const color=settings.basemap==='light'&&settings.windColor===DEFAULTS.windColor?'#223b50':settings.windColor;
@@ -95,14 +96,32 @@ function render(){if(!data)return;displaySnapshot=replayTime===null?data:replayF
  const count=Object.values(settings.layers).filter(Boolean).length;$('activeLayers').textContent=count===0?'No layers selected':`${count} layer${count===1?'':'s'} visible`;$('dataTimestamp').textContent=replayTime===null?`Snapshot ${clockLabel(data.generated_at)} · refresh ${ageLabel(data.generated_at)}`:`REPLAY ${new Date(replayTime).toISOString().slice(0,16).replace('T',' ')}Z · alerts remain LIVE`;syncReplayControls();
  updateLegend();updateStatus();if(selected)refreshInspector();
 }
+const barnesCache=new Map();
+function renderBarnes(){
+ const f=feed('winds');if(!settings.layers.barnes){$('count-barnes').textContent='54 ft wind analysis';return;}
+ const sourceRows=replayTime===null?f.rows:replayHistory?.feeds?.winds?.rows||f.rows;
+ const stations=prepareStations(sourceRows,mapTime());
+ const key=JSON.stringify(stations.map(s=>[s.name,s.lat,s.lon,s.u,s.v,s.time]));
+ let analysis=barnesCache.get(key);if(!analysis){analysis=analyzeBarnes(stations);barnesCache.set(key,analysis);if(barnesCache.size>65)barnesCache.delete(barnesCache.keys().next().value);}
+ $('count-barnes').title=analysis.status==='ok'?'54 ft average wind analysis; five-minute maximum sensor age':analysis.status==='insufficient_stations'?'At least five fresh 54 ft towers are required':'Not enough local station support for a valid analysis';
+ const observed=stations.length?new Date(Math.max(...stations.map(s=>s.time))).toISOString():null;
+ $('count-barnes').textContent=analysis.status==='ok'?`${analysis.stations} towers · 54 ft · ${clockLabel(observed)}`:`Unavailable · ${analysis.stations} fresh towers`;
+ if(analysis.status!=='ok')return;
+ for(const contour of analysis.contours){
+  const label=contour.level<0?`Convergence: ${Math.abs(contour.level)}`:contour.level>0?`Divergence: ${contour.level}`:'Zero divergence';
+  const line=L.polyline(contour.paths,{pane:'barnes',color:contour.color,weight:contour.weight,opacity:f.status==='error'?.45:.85,smoothFactor:0});
+  line.bindTooltip(esc(`${label} × 10⁻⁴ s⁻¹ · 54 ft Barnes · ${analysis.stations} towers`),{sticky:true});groups.barnes.addLayer(line);
+ }
+}
 function updateLegend(){const s=settings;const low=s.low.toLocaleString(),high=s.high.toLocaleString();$('efmMini').innerHTML=[`<${low}`,`${low}–<${high}`,`≥${high}`].map((label,i)=>`<span><i style="background:${s.efmColors[i]}"></i>${label}</span>`).join('');$('legendHeight').textContent=(s.height==='surface'?'SURFACE':s.height==='lowest'?'LOWEST':s.height==='200plus'?'200+ FT':s.height+' FT')+' WINDS';let html='';if(s.layers.winds){html+='<div class="legend-item"><span style="width:15px">↗</span>Wind barb · knots · from direction</div>';if(s.gusts)html+='<div class="legend-item">Upper right: 10-minute peak gust · kt</div>';if(s.thermo.tmp)html+='<div class="legend-item" style="color:#ff8c7c">Upper left: temperature · °F</div>';if(s.thermo.dp)html+='<div class="legend-item" style="color:#70e6a1">Lower left: dew point · °F</div>';if(s.thermo.rh)html+='<div class="legend-item" style="color:#9ed3ff">Lower right: relative humidity · %</div>';}if(s.layers.efm){html+='<div class="legend-section">';for(const [i,label] of [`|E| < ${low} V/m`,`${low} ≤ |E| < ${high} V/m`,`|E| ≥ ${high} V/m`].entries())html+=`<div class="legend-item"><i style="background:${s.efmColors[i]}"></i>${label}</div>`;html+='<div class="legend-item" style="font-size:8px;color:#7289a1">Dashed ring: API status flag present</div></div>';}
+ if(s.layers.barnes)html+='<div class="legend-section"><div class="legend-item">Barnes · 54 ft winds · ×10⁻⁴ s⁻¹</div><div class="legend-item"><i style="background:#ff8714"></i>Negative: convergence</div><div class="legend-item"><i style="background:#19cdf5"></i>Positive: divergence</div><div class="legend-item"><i style="background:#f5f5f5"></i>White: zero divergence</div><div class="legend-item">500 m grid · 10 km smoothing</div></div>';
  if(s.layers.cg)html+='<div class="legend-item"><span class="plus">+</span>Cloud-to-ground detection</div>';
  if(s.layers.cc)html+=`<div class="legend-section"><div class="legend-item">CC records / ~1 km cell / ${s.trail} min</div><div class="density-scale">${s.ccColors.map(c=>`<i style="background:${c}"></i>`).join('')}</div><div class="density-numbers"><span>1</span>${s.ccBreaks.map(x=>`<span>${x}+</span>`).join('')}</div></div>`;
  if(s.layers.profilers)html+='<div class="legend-item"><span style="color:#b7a7df">◇</span>Profiler · click for vertical profile</div>';
  if(s.layers.radar){const r=feed('radar');const colors=r.legend?.colors||['#559def','#00a600','#ffbe00','#d90000','#e000d0'];html+=`<div class="legend-section"><div class="legend-item">MRMS QC composite · dBZ</div><div class="density-scale">${colors.map(c=>`<i style="background:${esc(c)}"></i>`).join('')}</div><div class="density-numbers"><span>5</span><span>20</span><span>35</span><span>50</span><span>65</span><span>75</span></div><div class="legend-item" style="font-size:8px">${r.observed_at?clockLabel(r.observed_at)+' · '+ageLabel(r.observed_at):'Waiting for radar'}${freshAge(r.observed_at,mapTime())>20?' · hidden':''}</div></div>`;}
  $('legendContent').innerHTML=html||'<p class="legend-empty">Turn on a layer to explore observations.</p>';
 }
-function updateStatus(){let warnings=[],failed=0;const lines=[];for(const [key,label] of Object.entries(LABELS)){const f=liveFeed(key);let status='ok',message='';if(f.status==='error'){status='error';message=f.rows.length?'Last good data':'Unavailable';failed++;warnings.push(`${label}: source request failed. ${f.rows.length?'Showing its last good observations.':''}`);}else if(f.status!=='ok'){status='warn';message='Connecting';}else if(['cg','cc'].includes(key)){message=f.rows.length?f.rows.length+' records / 60 min':'No events / 60 min';}else{const age=freshAge(f.observed_at);message=clockLabel(f.observed_at)+' · '+(Number.isFinite(age)?Math.floor(age)+'m':'unknown');if(age>(key==='profilers'?180:15)){status='warn';warnings.push(`${label}: latest observation is ${ageLabel(f.observed_at,Date.now())}.`);}if(key==='profilers'&&f.source?.includes('fallback'))message+=' · fallback';}lines.push(`<div class="feed-line" title="${esc((f.source||'')+(f.error?' · '+f.error:''))}"><span><i class="${status}"></i>${label}</span><span class="feed-value ${status}">${esc(message)}</span></div>`);}
+function updateStatus(){let warnings=[],failed=0;const lines=[];for(const [key,label] of Object.entries(LABELS)){if(key==='barnes')continue;const f=liveFeed(key);let status='ok',message='';if(f.status==='error'){status='error';message=f.rows.length?'Last good data':'Unavailable';failed++;warnings.push(`${label}: source request failed. ${f.rows.length?'Showing its last good observations.':''}`);}else if(f.status!=='ok'){status='warn';message='Connecting';}else if(['cg','cc'].includes(key)){message=f.rows.length?f.rows.length+' records / 60 min':'No events / 60 min';}else{const age=freshAge(f.observed_at);message=clockLabel(f.observed_at)+' · '+(Number.isFinite(age)?Math.floor(age)+'m':'unknown');if(age>(key==='profilers'?180:15)){status='warn';warnings.push(`${label}: latest observation is ${ageLabel(f.observed_at,Date.now())}.`);}if(key==='profilers'&&f.source?.includes('fallback'))message+=' · fallback';}lines.push(`<div class="feed-line" title="${esc((f.source||'')+(f.error?' · '+f.error:''))}"><span><i class="${status}"></i>${label}</span><span class="feed-value ${status}">${esc(message)}</span></div>`);}
  $('feedStatus').innerHTML=lines.join('');const snapshotAge=freshAge(data?.generated_at);if(endpointFailure)warnings.unshift('Minute data service unavailable. Using the GitHub snapshot fallback.');if(snapshotFailure)warnings.unshift('Snapshot refresh failed. Retaining the last downloaded observations.');else if(snapshotAge>12)warnings.unshift(`Published snapshot is ${ageLabel(data.generated_at,Date.now())}. Check data times before use.`);$('networkStatus').textContent=failed?`${failed} feed${failed===1?'':'s'} unavailable`:snapshotAge>12?'Snapshot delayed':data?.collector?.startsWith('Cloudflare')?'Minute feed connected':'GitHub snapshot';
  if(warnings.length){$('mapAlert').textContent=warnings.slice(0,2).join(' ');$('mapAlert').hidden=false;}else if(tileFailures<5)$('mapAlert').hidden=true;
 }
@@ -160,7 +179,7 @@ function syncReplayControls(){
  $('replayTimeline').disabled=!replayHistory;$('replayPrevious').disabled=!replayHistory;$('replayNext').disabled=!replayHistory;
  if(replayHistory){const {start,end}=replayBounds(replayHistory);$('replayTimeline').max=Math.round((end-start)/60000);$('replayTimeline').value=active?Math.round((replayTime-start)/60000):Math.round((end-start)/60000);$('replayStart').textContent=clockLabel(new Date(start).toISOString());$('replayEnd').textContent=clockLabel(new Date(end).toISOString());}
  $('replayTime').textContent=active?new Date(replayTime).toISOString().slice(11,16)+'Z':'Current observations';
- const gaps=active?(displaySnapshot?.gaps||[]).filter(k=>settings.layers[k]):[];
+ const gaps=active?(displaySnapshot?.gaps||[]).filter(k=>settings.layers[k]||k==='winds'&&settings.layers.barnes):[];
  $('replayNote').textContent=active?(gaps.length?'Missing / partial: '+gaps.map(k=>LABELS[k]).join(', '):'Historical observations · live alerts continue'):'Previous 60 minutes · alerts monitor live observations';
 }
 async function preloadReplayImages(history,url){
