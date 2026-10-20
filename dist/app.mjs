@@ -1,4 +1,5 @@
-import {initOperations} from './operations-ui.mjs?v=ops-visible-20261020';
+import {initViews} from './views.mjs?v=two-views-20261020';
+import {initOperations} from './operations-ui.mjs?v=two-views-20261020';
 import {SHARED_CARTO_KEY} from './basemap-config.mjs?v=shared-map-20261019';
 import {BARNES,prepareStations,analyzeBarnes} from './barnes.mjs';
 import {validReplay,replayBounds,replayFrame,advanceFrame} from './replay.mjs';
@@ -14,6 +15,7 @@ const replayImages=new Map(),replayImageFailures=new Set();
 let replayTime=null,replayHistory=null,replayUrl='',replayPlaying=false,replayTimer=null,replayLoading=false,displaySnapshot=null;
 let data=null,selected=null,refreshing=false,refreshAt=Date.now()+60000,lastRefresh=0,snapshotFailure=false,endpointFailure=false;
 const map=L.map('map',{zoomControl:false,preferCanvas:true,minZoom:5,maxZoom:18}).setView([28.555,-80.63],10);
+const views=initViews({onMap:()=>map.invalidateSize()});
 L.control.zoom({position:'topright'}).addTo(map);
 L.control.scale({position:'bottomleft',imperial:true,metric:true,maxWidth:110}).addTo(map);
 function cartoKey(){return settings.cartoKey.trim() || SHARED_CARTO_KEY;}
@@ -45,13 +47,14 @@ function windSvg(direction,speed,color,size=40){let knots=Math.round(speed/5)*5,
 map.createPane('lightningRings');map.getPane('lightningRings').style.zIndex=405;
 const lightningRingLayer=L.layerGroup().addTo(map);let ringSignature='';
 const operations=initOperations({
+ onMap:()=>views.show('map'),
  onResize:()=>requestAnimationFrame(()=>map.invalidateSize()),
- onRingFocus:r=>{map.fitBounds((r.polygon?L.polygon(r.polygon):L.circle([r.lat,r.lon],{radius:r.radiusNm*1852})).getBounds(),{padding:[35,35],maxZoom:13});},
+ onRingFocus:r=>{views.show('map');map.fitBounds((r.polygon?L.polygon(r.polygon):L.circle([r.lat,r.lon],{radius:r.radiusNm*1852})).getBounds(),{padding:[35,35],maxZoom:13});},
  onConfigure:kind=>kind==='wind'?windAlerts.open():lightningWatches.open(),
  onAcknowledge:(kind,id)=>kind==='wind'?windAlerts.acknowledge(id):lightningWatches.acknowledge(id),
  onPresets:()=>lightningWatches.addPresets(),
  onSounds:()=>{if(!$('alertSound').textContent.startsWith('Sound on'))$('alertSound').click();if(!$('lightningSound').textContent.startsWith('Sound on'))$('lightningSound').click();},
- onFocus:(kind,r)=>{if(!Number.isFinite(r.lat)||!Number.isFinite(r.lon))return;settings.layers[kind]=true;if(kind==='winds')settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);inspect(kind,kind==='cc'?{...r,ccPoint:true}:kind==='winds'?{...r,site:windSite(r.tower)}:r);}
+ onFocus:(kind,r)=>{if(!Number.isFinite(r.lat)||!Number.isFinite(r.lon))return;views.show('map');settings.layers[kind]=true;if(kind==='winds')settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);inspect(kind,kind==='cc'?{...r,ccPoint:true}:kind==='winds'?{...r,site:windSite(r.tower)}:r);}
 });
 const lightningWatches=initLightningWatches({
  onChange:results=>operations.lightning(results),
@@ -65,16 +68,16 @@ const lightningWatches=initLightningWatches({
    const center=L.circleMarker([r.lat,r.lon],{pane:'lightningRings',radius:3,color,weight:2,fillColor:color,fillOpacity:1});center.bindTooltip(esc(r.name));center.on('click',onOpen);lightningRingLayer.addLayer(center);
   }
  },
- onFocus:r=>map.fitBounds((r.polygon?L.polygon(r.polygon):L.circle([r.lat,r.lon],{radius:r.radiusNm*1852})).getBounds(),{padding:[50,70],maxZoom:13}),
+ onFocus:r=>{views.show('map');map.fitBounds((r.polygon?L.polygon(r.polygon):L.circle([r.lat,r.lon],{radius:r.radiusNm*1852})).getBounds(),{padding:[50,70],maxZoom:13});},
  onPick:done=>{
-  $('lightningPickHint').hidden=false;map.getContainer().style.cursor='crosshair';$('sidebar').classList.remove('open');
+  views.show('map');$('lightningPickHint').hidden=false;map.getContainer().style.cursor='crosshair';$('sidebar').classList.remove('open');
   function finish(point){map.getContainer().removeEventListener('click',pick,true);document.removeEventListener('keydown',cancel);$('lightningPickHint').hidden=true;map.getContainer().style.cursor='';done(point);}
   function pick(e){e.stopPropagation();e.preventDefault();finish(map.mouseEventToLatLng(e));}
   function cancel(e){if(e.key==='Escape'){e.preventDefault();finish(null);}}
   map.getContainer().addEventListener('click',pick,true);document.addEventListener('keydown',cancel);$('lightningPickCancel').onclick=()=>finish(null);
  }
 });
-const windAlerts=initWindAlerts({onChange:results=>operations.wind(results),onFocus:r=>{goLive();settings.layers.winds=true;settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);const plot=selectWindPlots(feed('winds').rows,settings.height,settings.thermo).find(x=>x.site===windSite(r.tower));if(plot)inspect('winds',plot);}});
+const windAlerts=initWindAlerts({onChange:results=>operations.wind(results),onFocus:r=>{views.show('map');goLive();settings.layers.winds=true;settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);const plot=selectWindPlots(feed('winds').rows,settings.height,settings.thermo).find(x=>x.site===windSite(r.tower));if(plot)inspect('winds',plot);}});
 function render(){if(!data)return;displaySnapshot=replayTime===null?data:replayFrame(replayHistory,replayTime,settings.trail,replayUrl);if(replayTime!==null&&replayImageFailures.has(displaySnapshot.feeds.radar.image_data)){displaySnapshot.feeds.radar.image_data=null;if(!displaySnapshot.gaps.includes('radar'))displaySnapshot.gaps.push('radar');}operations.live(data,snapshotFailure);operations.display(displaySnapshot||data,settings,mapTime(),replayTime!==null);lightningWatches.update(data,snapshotFailure);windAlerts.update(snapshotFailure?{...liveFeed('winds'),status:'error'}:liveFeed('winds'));for(const g of Object.values(groups))g.clearLayers();stationIndex=[];const now=mapTime();const winds=selectWindPlots(feed('winds').rows,settings.height,settings.thermo);renderBarnes();$('count-winds').textContent=`${winds.length} sites · ${clockLabel(feed('winds').observed_at)}`;
  for(const r of winds){
   stationIndex.push({name:r.site,kind:'winds',r,lat:r.lat,lon:r.lon});if(!settings.layers.winds)continue;

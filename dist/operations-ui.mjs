@@ -10,7 +10,7 @@ const clock=t=>Number.isFinite(t)?new Date(t).toISOString().slice(11,19)+'Z':'â€
 const countdown=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
 const countLabel=n=>n.toLocaleString();
 const stateLabel=r=>r.state==='active'?'HOLD '+countdown(r.remainingMs):r.state==='quiet'?'NO RECENT DETECTIONS':r.state==='paused'?'PAUSED':'DATA UNAVAILABLE';
-export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAcknowledge,onSounds,onPresets}){
+export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAcknowledge,onSounds,onPresets,onMap=()=>{}}){
  let rings=[],winds=[],systems=[],live={},snapshot={},settings={},now=Date.now(),replay=false,tab='winds',sortKey='site',descending=false,tableRows=[],log=[],operator='',saveError=false;
  let notificationOn=false,sourceState=new Map(),ringFeed=null,ringEvents=[],liveFailed=false;
  const logKey='er-cop-event-log-v1';
@@ -20,12 +20,7 @@ export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAckno
  function record(entry){log.unshift({...entry,time:Date.now(),operator});log=validLog(log);persist();if(tab==='events'&&!$('opsDock').hidden)renderTable();}
  function notify(entry){if(!notificationOn||entry.event!=='Activated')return;try{new Notification(entry.location,{body:entry.detail,tag:entry.category+':'+entry.location});}catch{}}
  function monitor(category,rows){const previous=category==='lightning'?rings:winds;for(const entry of monitorEvents(previous,rows,category)){record(entry);notify(entry);}if(category==='lightning')rings=rows;else winds=rows;renderAlerts();if(category==='lightning')renderRings();}
- function side(open){$('opsPanel').hidden=!open;$('opsButton').setAttribute('aria-expanded',String(open));try{localStorage.setItem('er-cop-ops-visible-v2',String(open));}catch{}onResize();}
- let initial=true;try{const saved=localStorage.getItem('er-cop-ops-visible-v2');if(saved!==null)initial=saved==='true';}catch{}side(initial);
- $('opsButton').onclick=()=>side($('opsPanel').hidden);$('opsClose').onclick=()=>side(false);
- document.querySelectorAll('[data-ops-side]').forEach(b=>b.onclick=()=>{const name=b.dataset.opsSide;document.querySelectorAll('[data-ops-side]').forEach(x=>x.setAttribute('aria-selected',String(x===b)));$('opsRingsPanel').hidden=name!=='rings';$('opsAlertsPanel').hidden=name!=='alerts';});
- function dock(open){$('opsDock').hidden=!open;$('opsDataButton').setAttribute('aria-expanded',String(open));onResize();if(open)renderTable();}
- $('opsDataButton').onclick=()=>dock($('opsDock').hidden);$('opsDockClose').onclick=()=>dock(false);
+ $('opsClose').onclick=onMap;$('opsDockClose').onclick=onMap;
  document.querySelectorAll('[data-ops-table]').forEach(b=>b.onclick=()=>{tab=b.dataset.opsTable;sortKey=tab==='winds'?'site':tab==='efm'?'field_mill':'time';descending=['strikes','events'].includes(tab);document.querySelectorAll('[data-ops-table]').forEach(x=>x.setAttribute('aria-selected',String(x===b)));renderTable();});
  $('opsSearch').oninput=renderTable;$('opsHeight').onchange=renderTable;$('opsExport').onclick=exportTable;
  $('opsOperator').onchange=()=>{operator=$('opsOperator').value.trim().toUpperCase().slice(0,8);$('opsOperator').value=operator;try{localStorage.setItem('er-cop-operator',operator);}catch{}};
@@ -80,6 +75,6 @@ export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAckno
   $('opsTable').querySelectorAll('[data-row]').forEach(b=>b.onclick=()=>{const r=tableRows[Number(b.dataset.row)];onFocus(tab==='winds'?'winds':tab==='efm'?'efm':r.type,r);});
  }
  function exportTable(){const cols=columns(),body=csv([cols.map(x=>x[1]),...tableRows.map(r=>cols.map(([k])=>k==='time'&&Number.isFinite(r.time)?new Date(r.time).toISOString():cell(r,k)))]),url=URL.createObjectURL(new Blob([body],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='er-cop-'+tab+'-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- dock(true);
+ renderTable();
  return {wind:rows=>monitor('wind',rows),lightning:rows=>monitor('lightning',rows),live:feedsChanged,display(next,options,time,isReplay){snapshot=next;settings=options;now=time;replay=isReplay;renderTable();},tick(){if(!$('opsPanel').hidden)renderRings();},record};
 }

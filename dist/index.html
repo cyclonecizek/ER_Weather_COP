@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101722"><title>Eastern Range Weather COP</title><meta name="description" content="A common operating picture for Eastern Range weather: wind towers, electric field mills, MERLIN lightning, and wind profilers."><link rel="icon" type="image/svg+xml" href="./favicon.svg"><link rel="stylesheet" href="./vendor/leaflet.css"><link rel="stylesheet" href="./style.css?v=ops-visible-20261020"></head>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101722"><title>Eastern Range Weather COP</title><meta name="description" content="A common operating picture for Eastern Range weather: wind towers, electric field mills, MERLIN lightning, and wind profilers."><link rel="icon" type="image/svg+xml" href="./favicon.svg"><link rel="stylesheet" href="./vendor/leaflet.css"><link rel="stylesheet" href="./style.css?v=two-views-20261020"></head>
 <body>
 <header class="topbar">
  <a class="brand" href="./" aria-label="Eastern Range Weather COP home"><span class="brandmark"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="13"/><path d="M20 1v10M20 29v10M1 20h10M29 20h10M8 32l24-24"/><circle cx="20" cy="20" r="4"/></svg></span><span><span class="brand-title">EASTERN RANGE <span>WEATHER</span></span><span class="brand-sub">COMMON OPERATING PICTURE</span></span></a>
- <div class="top-center"><span class="status-dot"></span> OBSERVATION NETWORK <span class="divider"></span><span id="networkStatus">Connecting</span></div>
- <div class="top-actions"><button type="button" id="opsButton" class="wind-alert-button" aria-expanded="true" aria-controls="opsPanel">Operations <span id="opsBadge" class="ops-badge" hidden>0</span></button><button type="button" id="opsDataButton" class="wind-alert-button" aria-expanded="true" aria-controls="opsDock">Data &amp; log</button><button id="windAlertsButton" class="wind-alert-button">Wind alerts</button><span class="clock"><small>UTC</small><strong id="clock">--:--:--</strong><span id="clockDate"></span></span><button class="icon-button" id="settingsButton" title="Display settings" aria-label="Display settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button></div>
+ <nav class="view-tabs" role="tablist" aria-label="Workspace view"><button type="button" id="mapViewTab" role="tab" aria-selected="true" aria-controls="mapViewPanel">Map view</button><button type="button" id="operationsViewTab" role="tab" aria-selected="false" aria-controls="operationsViewPanel" tabindex="-1">Operations <span id="opsBadge" class="ops-badge" hidden>0</span></button></nav>
+ <div class="top-actions"><span id="networkStatus" class="header-network-status">Connecting</span><button id="windAlertsButton" class="wind-alert-button">Wind alerts</button><span class="clock"><small>UTC</small><strong id="clock">--:--:--</strong><span id="clockDate"></span></span><button class="icon-button" id="settingsButton" title="Display settings" aria-label="Display settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button></div>
 </header>
-<div class="workspace">
+<div class="workspace" id="mapViewPanel" role="tabpanel" aria-labelledby="mapViewTab">
  <aside class="sidebar" id="sidebar">
   <div class="section-heading"><span class="eyebrow">YOUR WEATHER WORKSPACE</span><span class="workspace-tag">ER / FL</span></div>
   <h1>The range.<br><span>In one view.</span></h1><p class="intro">Surface observations, electric fields, and lightning across the Eastern Range.</p>
@@ -43,19 +43,25 @@
   <button class="mobile-layers" id="mobileLayers">☰ &nbsp; Layers & controls</button>
   <div class="loading" id="loading"><span class="spinner"></span><span>Connecting the range</span></div>
  </div>
- <section class="ops-dock" id="opsDock" aria-label="Observation tables and event history">
-  <div class="ops-dock-head"><div class="ops-tabs" role="tablist" aria-label="Data tables"><button role="tab" aria-selected="true" aria-controls="opsTableWrap" data-ops-table="winds">WINDS</button><button role="tab" aria-selected="false" aria-controls="opsTableWrap" data-ops-table="efm">Field mills</button><button role="tab" aria-selected="false" aria-controls="opsTableWrap" data-ops-table="strikes">Strike log</button><button role="tab" aria-selected="false" aria-controls="opsTableWrap" data-ops-table="events">Event log</button></div><button id="opsDockClose" class="ops-close" aria-label="Close data tables">×</button></div>
-  <div class="ops-table-tools"><input id="opsSearch" type="search" placeholder="Filter table…" aria-label="Filter data table"><select id="opsHeight" aria-label="Table sensor height"><option value="all">All sensor heights</option><option value="map">Follow map height</option></select><label id="opsOperatorLabel" hidden>Operator <input id="opsOperator" maxlength="8" placeholder="Initials"></label><button id="opsExport">Export CSV</button><span id="opsTableMeta"></span></div>
-  <div id="opsTableWrap" class="ops-table-wrap" role="tabpanel" tabindex="0"><table id="opsTable"></table></div>
- </section>
+
  </main>
+
+</div>
+<section id="operationsViewPanel" class="operations-view" role="tabpanel" aria-labelledby="operationsViewTab" hidden>
+ <header class="operations-heading"><div><span class="eyebrow">EASTERN RANGE · LIVE MONITORING</span><h1>Operations console</h1><p>Lightning watches, alerts, observations, and event history.</p></div><span class="operations-live"><span class="status-dot"></span> Alerts monitor live data in both views</span></header>
  <aside class="ops-panel" id="opsPanel" aria-label="Live operations monitor">
-  <div class="ops-panel-head"><div><span class="eyebrow">LIVE MONITOR</span><h2>Range watch</h2></div><button id="opsClose" class="ops-close" aria-label="Close operations monitor">×</button></div>
-  <p class="ops-note">Live alerts and lightning activity. Observation tables are displayed below the map.</p>
+  <div class="ops-panel-head"><div><span class="eyebrow">LIVE MONITOR</span><h2>Range watch</h2></div><button id="opsClose" class="ops-map-link" aria-label="Return to map view">Map ↗</button></div>
+  <p class="ops-note">Live alerts and lightning activity. Select a site or observation to locate it in Map view.</p>
   <div id="opsAlertsPanel"><h3 class="ops-section-title">Alerts &amp; feed status</h3><div class="ops-panel-tools"><span id="opsAlertCount"></span><button id="opsWindRules">Manage wind rules</button><button id="opsSounds">Enable sounds</button><button id="opsNotifications">Enable notifications</button></div><p class="ops-note">Alerts run while this page is open. Acknowledgement does not release a hold. Event history and acknowledgements belong to this browser.</p><div id="opsAlerts" aria-live="polite"></div></div>
   <div id="opsRingsPanel"><h3 class="ops-section-title">Lightning rings</h3><div class="ops-panel-tools"><span id="opsRingCount"></span><button id="opsNewWatch">+ Custom watch</button><button id="opsAddPresets">Add 14 site presets</button></div><p class="ops-note" id="opsPresetStatus">Site previews use the supplied boundaries and a 30-minute window. Choose “Add 14 site presets” to enable their alert watches. Existing custom watches take priority.</p><div id="opsRingBoard" class="ops-ring-board"></div><p class="ops-note">Charts: inside detections per 5 minutes over one hour. Counts use each hold window. Nearby: within approximately 5 nm outside the boundary. These monitors remain LIVE during replay.</p></div>
  </aside>
-</div>
+ <section class="ops-dock" id="opsDock" aria-label="Observation tables and event history">
+  <div class="ops-dock-head"><div class="ops-tabs" role="tablist" aria-label="Data tables"><button role="tab" aria-selected="true" aria-controls="opsTableWrap" data-ops-table="winds">WINDS</button><button role="tab" aria-selected="false" aria-controls="opsTableWrap" data-ops-table="efm">Field mills</button><button role="tab" aria-selected="false" aria-controls="opsTableWrap" data-ops-table="strikes">Strike log</button><button role="tab" aria-selected="false" aria-controls="opsTableWrap" data-ops-table="events">Event log</button></div><button id="opsDockClose" class="ops-map-link" aria-label="Return to map from data tables">Map ↗</button></div>
+  <div class="ops-table-tools"><input id="opsSearch" type="search" placeholder="Filter table…" aria-label="Filter data table"><select id="opsHeight" aria-label="Table sensor height"><option value="all">All sensor heights</option><option value="map">Follow map height</option></select><label id="opsOperatorLabel" hidden>Operator <input id="opsOperator" maxlength="8" placeholder="Initials"></label><button id="opsExport">Export CSV</button><span id="opsTableMeta"></span></div>
+  <div id="opsTableWrap" class="ops-table-wrap" role="tabpanel" tabindex="0"><table id="opsTable"></table></div>
+ </section>
+</section>
+
 <dialog id="settings"><div class="settings-head"><div><span class="eyebrow">MAKE IT YOURS</span><h2>Display settings</h2></div><button class="close-button" id="closeSettings" aria-label="Close display settings">×</button></div><p class="settings-intro">Tune thresholds and colors for your workflow. Preferences are saved on this browser.</p><form id="settingsForm">
  <div class="settings-section"><h3>Electric field mills</h3><p>Categories use absolute electric-field magnitude, in V/m.</p><div class="threshold-grid"><label>Green below<input type="number" id="settingLow" min="0" required></label><label>Red at or above<input type="number" id="settingHigh" min="1" required></label></div><div class="color-row" id="efmColors"></div><label class="palette-label">Palette<select id="efmPalette"><option value="custom">Custom / current</option><option value="placefile">Placefile original</option><option value="accessible">Blue · amber · magenta</option><option value="muted">Mint · peach · rose</option></select></label></div>
  <div class="settings-section"><h3>Cloud-to-cloud density</h3><p>Detection records per approximately 1 km cell within the selected trail.</p><div id="ccSettings" class="cc-settings"></div></div>
@@ -89,5 +95,5 @@
 <label class="lightning-color-field">Ring color (when quiet)<input type="color" id="lightningColor" value="#87c5e9"></label>
 <p class="wind-alert-note">Radius includes detections on its boundary. Red: active hold. Amber dashed: coverage gap. Gray dashed: paused. Create another watch at the same center for additional rings. The feed retains 60 minutes, so hold times are limited to 60 minutes. “No recent detections” describes available records and does not establish a GO decision.</p>
 <p id="lightningFormError" class="settings-error" role="alert"></p><div class="settings-actions"><button type="button" id="lightningCancelEdit" class="secondary-button">Clear form</button><button type="submit" id="lightningSave" class="primary-button">Add watch</button></div></form></dialog>
-<script src="./vendor/leaflet.js"></script><script type="module" src="./app.mjs?v=ops-visible-20261020"></script>
+<script src="./vendor/leaflet.js"></script><script type="module" src="./app.mjs?v=two-views-20261020"></script>
 </body></html>
