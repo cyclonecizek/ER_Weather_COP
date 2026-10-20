@@ -3,7 +3,7 @@ import {initOperations} from './operations-ui.mjs?v=two-views-20261020';
 import {SHARED_CARTO_KEY} from './basemap-config.mjs?v=shared-map-20261019';
 import {BARNES,prepareStations,analyzeBarnes} from './barnes.mjs';
 import {validReplay,replayBounds,replayFrame,advanceFrame} from './replay.mjs';
-import {initLightningWatches} from './lightning-ui.mjs?v=ops-20261020';
+import {initLightningWatches} from './lightning-ui.mjs?v=map-rings-20261020';
 import {initWindAlerts} from './alerts-ui.mjs?v=ops-20261020';
 import {DEFAULTS,clean,windSite,selectWinds,selectWindPlots,efmCategory,ccCells,ccDetections,freshAge,ztime,settingsValid,settingsFrom,normalizeDataEndpoint} from './core.mjs?v=cc-mode-20261019';
 const $=id=>document.getElementById(id);
@@ -45,7 +45,9 @@ function staleClass(iso,key){return freshAge(iso,mapTime())>(key==='profilers'?1
 function marker(lat,lon,html,size,kind,record,tooltip){if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)return;const m=L.marker([lat,lon],{pane:kind,keyboard:true,title:tooltip,icon:L.divIcon({html,className:'cop-marker',iconSize:size,iconAnchor:[size[0]/2,size[1]/2]})}).bindTooltip(esc(tooltip),{direction:'top',offset:[0,-12]});m.on('click',()=>inspect(kind,record));groups[kind].addLayer(m);return m;}
 function windSvg(direction,speed,color,size=40){let knots=Math.round(speed/5)*5,paths=[],y=-25;while(knots>=50){paths.push(`<path d="M0 ${y} L12 ${y+5} L0 ${y+9}Z" fill="${color}"/>`);knots-=50;y+=10;}while(knots>=10){paths.push(`<path d="M0 ${y} L11 ${y+5}"/>`);knots-=10;y+=5;}if(knots>=5)paths.push(`<path d="M0 ${y} L6 ${y+3}"/>`);return `<svg width="${size}" height="${size}" viewBox="-32 -32 64 64" style="color:${color};stroke-width:1.7" aria-hidden="true"><g transform="rotate(${direction})">${speed<2.5?'<circle cx="0" cy="0" r="3"/>':'<path d="M0 0V-25"/>'+paths.join('')}<circle cx="0" cy="0" r="1.4" fill="${color}"/></g></svg>`;}
 map.createPane('lightningRings');map.getPane('lightningRings').style.zIndex=405;
-const lightningRingLayer=L.layerGroup().addTo(map);let ringSignature='';
+const lightningRingLayer=L.layerGroup().addTo(map);let ringSignature='',mapRingsVisible=true;
+try{mapRingsVisible=localStorage.getItem('er-cop-map-rings-visible')!=='false';}catch{}
+$('mapLightningRings').checked=mapRingsVisible;
 const operations=initOperations({
  onMap:()=>views.show('map'),
  onResize:()=>requestAnimationFrame(()=>map.invalidateSize()),
@@ -59,12 +61,13 @@ const operations=initOperations({
 const lightningWatches=initLightningWatches({
  onChange:results=>operations.lightning(results),
  onRings:(results,onOpen)=>{
-  const signature=JSON.stringify(results.map(r=>[r.rule,r.state,r.gaps.length]));if(signature===ringSignature)return;ringSignature=signature;lightningRingLayer.clearLayers();
+  if(!mapRingsVisible){lightningRingLayer.clearLayers();ringSignature='';return;}
+  const signature=JSON.stringify(results.map(r=>[r.rule,r.state,r.gaps.length,r.preview]));if(signature===ringSignature)return;ringSignature=signature;lightningRingLayer.clearLayers();
   for(const result of results){const r=result.rule;if(!r.showRing)continue;
-   const color=result.state==='paused'?'#8b9bae':result.gaps.length&&result.state!=='active'?'#e7ba79':result.state==='active'?'#ff675c':r.color;
-   const ringOptions={pane:'lightningRings',color,weight:2,fillColor:color,fillOpacity:result.state==='active'?.07:.015,dashArray:result.gaps.length||result.state==='paused'?'7 6':null};
+   const color=result.preview?r.color:result.state==='paused'?'#8b9bae':result.gaps.length&&result.state!=='active'?'#e7ba79':result.state==='active'?'#ff675c':r.color;
+   const ringOptions={pane:'lightningRings',color,weight:result.preview?1.5:2,fillColor:color,fillOpacity:result.preview?.005:result.state==='active'?.07:.015,dashArray:result.preview||result.gaps.length||result.state==='paused'?'7 6':null};
    const circle=r.polygon?L.polygon(r.polygon,ringOptions):L.circle([r.lat,r.lon],{...ringOptions,radius:r.radiusNm*1852});
-   circle.bindTooltip(esc(`${r.name} · ${r.radiusNm} nm · ${r.type.toUpperCase()} · ${r.holdMinutes} min hold`),{sticky:true});circle.on('click',onOpen);lightningRingLayer.addLayer(circle);
+   circle.bindTooltip(esc(`${r.name} · ${r.polygon?'site boundary':r.radiusNm+' nm'} · ${result.preview?'PREVIEW · alerts not enabled':r.type.toUpperCase()+' · '+r.holdMinutes+' min hold'}`),{sticky:true});circle.on('click',onOpen);lightningRingLayer.addLayer(circle);
    const center=L.circleMarker([r.lat,r.lon],{pane:'lightningRings',radius:3,color,weight:2,fillColor:color,fillOpacity:1});center.bindTooltip(esc(r.name));center.on('click',onOpen);lightningRingLayer.addLayer(center);
   }
  },
@@ -77,6 +80,7 @@ const lightningWatches=initLightningWatches({
   map.getContainer().addEventListener('click',pick,true);document.addEventListener('keydown',cancel);$('lightningPickCancel').onclick=()=>finish(null);
  }
 });
+$('mapLightningRings').onchange=()=>{mapRingsVisible=$('mapLightningRings').checked;try{localStorage.setItem('er-cop-map-rings-visible',String(mapRingsVisible));}catch{}ringSignature='';lightningWatches.update(data,snapshotFailure);};
 const windAlerts=initWindAlerts({onChange:results=>operations.wind(results),onFocus:r=>{views.show('map');goLive();settings.layers.winds=true;settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);const plot=selectWindPlots(feed('winds').rows,settings.height,settings.thermo).find(x=>x.site===windSite(r.tower));if(plot)inspect('winds',plot);}});
 function render(){if(!data)return;displaySnapshot=replayTime===null?data:replayFrame(replayHistory,replayTime,settings.trail,replayUrl);if(replayTime!==null&&replayImageFailures.has(displaySnapshot.feeds.radar.image_data)){displaySnapshot.feeds.radar.image_data=null;if(!displaySnapshot.gaps.includes('radar'))displaySnapshot.gaps.push('radar');}operations.live(data,snapshotFailure);operations.display(displaySnapshot||data,settings,mapTime(),replayTime!==null);lightningWatches.update(data,snapshotFailure);windAlerts.update(snapshotFailure?{...liveFeed('winds'),status:'error'}:liveFeed('winds'));for(const g of Object.values(groups))g.clearLayers();stationIndex=[];const now=mapTime();const winds=selectWindPlots(feed('winds').rows,settings.height,settings.thermo);renderBarnes();$('count-winds').textContent=`${winds.length} sites · ${clockLabel(feed('winds').observed_at)}`;
  for(const r of winds){
