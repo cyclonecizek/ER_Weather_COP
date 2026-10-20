@@ -267,7 +267,7 @@ palettes continue to apply to the density-grid view.
 
 ### Operations monitor and data dock
 
-The Operations button opens a live ring board and unified alert center. Existing
+The top navigation separates **Map view** (combined map, layers, and replay controls)\nfrom **Operations** (ring widgets, alerts, observation tables, and event history).\nSelecting a site or table row in Operations returns to its location on the map.\nBoth views share one live monitoring session. Existing
 custom watches and wind rules are retained. **Add 14 site presets** explicitly loads
 the boundaries supplied in `hannahdashboard.html`; it does not silently enable new
 watches for returning users. Presets use both CG/CC and a 30-minute hold. Review
@@ -285,7 +285,7 @@ while the page can run. Existing wind metric choices and fresh-data requirements
 remain in force. Lightning holds cannot release during a coverage gap. There is no
 storm ETA prediction in this update.
 
-**Data & log** opens sortable, searchable WINDS and field-mill observations, a strike
+The Operations view includes sortable, searchable WINDS and field-mill observations, a strike
 log, and a local event log, with CSV exports. Observation and strike tables follow
 the map's live/replay time, independently of layer visibility. All sensor heights
 are shown by default; the wind table can instead follow the map height selection.
