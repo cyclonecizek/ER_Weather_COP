@@ -1,0 +1,24 @@
+# In Render: New > Blueprint, choose this repository, then set the
+# Blueprint Path to render-wsr.yaml. This creates a separate web service.
+services:
+  - type: web
+    name: er-wsr-polling
+    runtime: python
+    plan: free
+    rootDir: services/wsr-polling
+    buildCommand: python -m unittest discover -s tests -v
+    startCommand: python server.py
+    healthCheckPath: /healthz
+    buildFilter:
+      paths:
+        - services/wsr-polling/**
+        - render-wsr.yaml
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.12
+      - key: POLL_SECONDS
+        value: "60"
+      - key: HISTORY_MINUTES
+        value: "120"
+      - key: CACHE_DIR
+        value: /tmp/wsr-polling
