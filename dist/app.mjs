@@ -1,4 +1,4 @@
-import {initOperations} from './operations-ui.mjs?v=ops-20261020';
+import {initOperations} from './operations-ui.mjs?v=ops-visible-20261020';
 import {SHARED_CARTO_KEY} from './basemap-config.mjs?v=shared-map-20261019';
 import {BARNES,prepareStations,analyzeBarnes} from './barnes.mjs';
 import {validReplay,replayBounds,replayFrame,advanceFrame} from './replay.mjs';

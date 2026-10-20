@@ -1,6 +1,7 @@
+import {SITE_WATCHES} from './site-watches.mjs?v=ops-20261020';
 import {clean,efmCategory,ztime,selectWindPlots} from './core.mjs';
 import {WIND_METRICS} from './wind-alerts.mjs';
-import {insideWatch} from './lightning-watches.mjs?v=ops-20261020';
+import {insideWatch,evaluateLightningWatch} from './lightning-watches.mjs?v=ops-20261020';
 import {observationRows,lightningRows,ringActivity,monitorEvents,csv,validLog,eventTime} from './operations-model.mjs?v=ops-20261020';
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -11,7 +12,7 @@ const countLabel=n=>n.toLocaleString();
 const stateLabel=r=>r.state==='active'?'HOLD '+countdown(r.remainingMs):r.state==='quiet'?'NO RECENT DETECTIONS':r.state==='paused'?'PAUSED':'DATA UNAVAILABLE';
 export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAcknowledge,onSounds,onPresets}){
  let rings=[],winds=[],systems=[],live={},snapshot={},settings={},now=Date.now(),replay=false,tab='winds',sortKey='site',descending=false,tableRows=[],log=[],operator='',saveError=false;
- let notificationOn=false,sourceState=new Map(),ringFeed=null,ringEvents=[];
+ let notificationOn=false,sourceState=new Map(),ringFeed=null,ringEvents=[],liveFailed=false;
  const logKey='er-cop-event-log-v1';
  try{log=validLog(JSON.parse(localStorage.getItem(logKey)||'[]'));operator=localStorage.getItem('er-cop-operator')||'';}catch{}
  $('opsOperator').value=operator;
@@ -19,8 +20,8 @@ export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAckno
  function record(entry){log.unshift({...entry,time:Date.now(),operator});log=validLog(log);persist();if(tab==='events'&&!$('opsDock').hidden)renderTable();}
  function notify(entry){if(!notificationOn||entry.event!=='Activated')return;try{new Notification(entry.location,{body:entry.detail,tag:entry.category+':'+entry.location});}catch{}}
  function monitor(category,rows){const previous=category==='lightning'?rings:winds;for(const entry of monitorEvents(previous,rows,category)){record(entry);notify(entry);}if(category==='lightning')rings=rows;else winds=rows;renderAlerts();if(category==='lightning')renderRings();}
- function side(open){$('opsPanel').hidden=!open;$('opsButton').setAttribute('aria-expanded',String(open));try{localStorage.setItem('er-cop-ops-open',String(open));}catch{}onResize();}
- let initial=window.innerWidth>=1500;try{const saved=localStorage.getItem('er-cop-ops-open');if(saved!==null)initial=saved==='true';}catch{}side(initial);
+ function side(open){$('opsPanel').hidden=!open;$('opsButton').setAttribute('aria-expanded',String(open));try{localStorage.setItem('er-cop-ops-visible-v2',String(open));}catch{}onResize();}
+ let initial=true;try{const saved=localStorage.getItem('er-cop-ops-visible-v2');if(saved!==null)initial=saved==='true';}catch{}side(initial);
  $('opsButton').onclick=()=>side($('opsPanel').hidden);$('opsClose').onclick=()=>side(false);
  document.querySelectorAll('[data-ops-side]').forEach(b=>b.onclick=()=>{const name=b.dataset.opsSide;document.querySelectorAll('[data-ops-side]').forEach(x=>x.setAttribute('aria-selected',String(x===b)));$('opsRingsPanel').hidden=name!=='rings';$('opsAlertsPanel').hidden=name!=='alerts';});
  function dock(open){$('opsDock').hidden=!open;$('opsDataButton').setAttribute('aria-expanded',String(open));onResize();if(open)renderTable();}
@@ -33,9 +34,11 @@ export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAckno
  $('opsNewWatch').onclick=()=>onConfigure('lightning');$('opsWindRules').onclick=()=>onConfigure('wind');$('opsAddPresets').onclick=()=>{const message=onPresets();$('opsPresetStatus').textContent=message;record({category:'system',event:'Site watches',location:'Ring board',detail:message});};
  function renderRings(){
   if(ringFeed!==live.feeds){ringFeed=live.feeds;ringEvents=lightningRows(live.feeds,Date.now(),60);}const events=ringEvents;
-  $('opsRingCount').textContent=`${rings.filter(r=>r.state==='active').length} active / ${rings.length} watches`;
-  $('opsRingBoard').innerHTML=rings.map(r=>{const activity=ringActivity(r.rule,events),max=Math.max(1,...activity.bins),bars=activity.bins.map((n,i)=>`<rect x="${i*8}" y="${24-n/max*23}" width="6" height="${Math.max(1,n/max*23)}" fill="${n?'#efb37d':'#304256'}"/>`).join('');return `<article class="ops-ring ${r.state}" style="--ring-color:${esc(r.rule.color)}"><button class="ops-ring-focus" data-ring="${esc(r.rule.id)}" title="Locate ${esc(r.rule.name)}"><span>${esc(r.rule.name)}</span><strong>${stateLabel(r)}</strong></button><div class="ops-ring-meta">${r.rule.polygon?'Site boundary':r.rule.radiusNm+' nm'} · ${r.rule.type.toUpperCase()} · ${r.rule.holdMinutes} min hold</div><svg viewBox="0 0 96 25" role="img" aria-label="Detections inside boundary per five minutes over previous hour">${bars}</svg><div class="ops-ring-meta">CG ${countLabel(activity.cg)} · CC ${countLabel(activity.cc)} · nearby ${countLabel(activity.nearby)}</div><div class="ops-ring-meta">${r.event?'Last '+clock(r.event.time)+' · '+r.event.type.toUpperCase():'No matching detection'}${r.ack?' · acknowledged':''}</div>${r.gaps.length?'<p class="ops-gap">Coverage incomplete. Hold release unavailable.</p>':''}</article>`;}).join('')||'<p class="ops-empty">Add site presets or create a custom watch to begin monitoring.</p>';
-  $('opsRingBoard').querySelectorAll('[data-ring]').forEach(b=>b.onclick=()=>onRingFocus(rings.find(r=>r.rule.id===b.dataset.ring).rule));
+  const previewFeeds=liveFailed?Object.fromEntries(Object.entries(live.feeds||{}).map(([k,f])=>[k,{...f,status:'error'}])):live.feeds;
+  const boardRings=rings.length?rings:SITE_WATCHES.map(rule=>({rule,...evaluateLightningWatch(rule,previewFeeds),preview:true}));
+  $('opsRingCount').textContent=rings.length?`${rings.filter(r=>r.state==='active').length} active / ${rings.length} watches`:'14 site previews · alerts not enabled';
+  $('opsRingBoard').innerHTML=boardRings.map(r=>{const activity=ringActivity(r.rule,events),max=Math.max(1,...activity.bins),bars=activity.bins.map((n,i)=>`<rect x="${i*8}" y="${24-n/max*23}" width="6" height="${Math.max(1,n/max*23)}" fill="${n?'#efb37d':'#304256'}"/>`).join('');return `<article class="ops-ring ${r.state}" style="--ring-color:${esc(r.rule.color)}"><button class="ops-ring-focus" data-ring="${esc(r.rule.id)}" title="Locate ${esc(r.rule.name)}"><span>${esc(r.rule.name)}</span><strong>${stateLabel(r)}</strong></button><div class="ops-ring-meta">${r.preview?'PREVIEW · NOT ALERTING · ':''}${r.rule.polygon?'Site boundary':r.rule.radiusNm+' nm'} · ${r.rule.type.toUpperCase()} · ${r.rule.holdMinutes} min hold</div><svg viewBox="0 0 96 25" role="img" aria-label="Detections inside boundary per five minutes over previous hour">${bars}</svg><div class="ops-ring-meta">CG ${countLabel(activity.cg)} · CC ${countLabel(activity.cc)} · nearby ${countLabel(activity.nearby)}</div><div class="ops-ring-meta">${r.event?'Last '+clock(r.event.time)+' · '+r.event.type.toUpperCase():'No matching detection'}${r.ack?' · acknowledged':''}</div>${r.gaps.length?'<p class="ops-gap">Coverage incomplete. Hold release unavailable.</p>':''}</article>`;}).join('')||'<p class="ops-empty">Add site presets or create a custom watch to begin monitoring.</p>';
+  $('opsRingBoard').querySelectorAll('[data-ring]').forEach(b=>b.onclick=()=>onRingFocus(boardRings.find(r=>r.rule.id===b.dataset.ring).rule));
  }
  function renderAlerts(){
   const alerts=[...rings.filter(r=>['active','unknown'].includes(r.state)).map(r=>({...r,category:'lightning'})),...winds.filter(r=>['active','unknown'].includes(r.state)).map(r=>({...r,category:'wind'})),...systems];
@@ -47,7 +50,7 @@ export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAckno
   $('opsAlerts').querySelectorAll('[data-configure]').forEach(b=>onClick(b,()=>onConfigure(b.dataset.configure)));
  }
  function onClick(button,fn){button.onclick=fn;}
- function feedsChanged(next,failed){live=next||{};systems=[];
+ function feedsChanged(next,failed){live=next||{};liveFailed=failed;systems=[];
   for(const key of ['winds','efm','cg','cc','radar','profilers']){const f=live.feeds?.[key];if(!f)continue;const fetched=eventTime(f.fetched_at),observed=eventTime(f.observed_at);const ageLimit=key==='profilers'?180:key==='radar'||key==='efm'?15:5;const time=['cg','cc'].includes(key)?fetched:observed;
    const bad=failed||f.status!=='ok'||!Number.isFinite(time)||Date.now()-time>ageLimit*60000;
    if(bad)systems.push({id:key,category:'system',name:key.toUpperCase()+' feed',state:'unknown',detail:failed?'Snapshot refresh failed. Last downloaded observations retained.':f.status!=='ok'?'Source request failed or unavailable.':'Observations or query coverage are older than '+ageLimit+' minutes.'});
@@ -77,5 +80,6 @@ export function initOperations({onResize,onFocus,onRingFocus,onConfigure,onAckno
   $('opsTable').querySelectorAll('[data-row]').forEach(b=>b.onclick=()=>{const r=tableRows[Number(b.dataset.row)];onFocus(tab==='winds'?'winds':tab==='efm'?'efm':r.type,r);});
  }
  function exportTable(){const cols=columns(),body=csv([cols.map(x=>x[1]),...tableRows.map(r=>cols.map(([k])=>k==='time'&&Number.isFinite(r.time)?new Date(r.time).toISOString():cell(r,k)))]),url=URL.createObjectURL(new Blob([body],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='er-cop-'+tab+'-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ dock(true);
  return {wind:rows=>monitor('wind',rows),lightning:rows=>monitor('lightning',rows),live:feedsChanged,display(next,options,time,isReplay){snapshot=next;settings=options;now=time;replay=isReplay;renderTable();},tick(){if(!$('opsPanel').hidden)renderRings();},record};
 }
