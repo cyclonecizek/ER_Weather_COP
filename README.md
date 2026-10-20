@@ -264,3 +264,45 @@ aggregation or thinning, using Leaflet canvas circles for large event sets.
 Click a point for its source timestamp, record ID, and available metadata. These
 are MERLIN detection records, not clustered flashes. Density thresholds and
 palettes continue to apply to the density-grid view.
+
+### Operations monitor and data dock
+
+The Operations button opens a live ring board and unified alert center. Existing
+custom watches and wind rules are retained. **Add 14 site presets** explicitly loads
+the boundaries supplied in `hannahdashboard.html`; it does not silently enable new
+watches for returning users. Presets use both CG/CC and a 30-minute hold. Review
+those settings as needed. The original polygon vertices are preserved for rendering
+and detection inclusion. Changing a preset's center or nominal radius in the editor
+converts that watch to a circle. The board shows the last detection, hold countdown,
+CG/CC counts in the hold window, approximate nearby counts within 5 nm of the
+boundary, and five-minute activity bins over the prior hour. Ring cards locate the
+watch on the combined map.
+
+The alert center combines active wind/lightning conditions and source-health gaps.
+Acknowledging a condition does not hide it or release its latch. Optional sounds and
+desktop notifications require session interaction/browser permission and only work
+while the page can run. Existing wind metric choices and fresh-data requirements
+remain in force. Lightning holds cannot release during a coverage gap. There is no
+storm ETA prediction in this update.
+
+**Data & log** opens sortable, searchable WINDS and field-mill observations, a strike
+log, and a local event log, with CSV exports. Observation and strike tables follow
+the map's live/replay time, independently of layer visibility. All sensor heights
+are shown by default; the wind table can instead follow the map height selection.
+Clicking a station row locates the sensor and enables its map layer. The tables
+retain separate one-minute mean, one-minute peak, and ten-minute peak columns;
+temperature/dewpoint/RH belong to the displayed sensor height. Field-mill categories
+use the same configurable magnitude thresholds and colors as the map, with API flags
+preserved.
+
+Alerts, ring cards, source-health reporting and event history always use live data,
+even during replay. The event log records activations, acknowledgements, newer
+lightning detections resetting holds, confirmed releases, source gaps/recovery and
+monitor pauses. The last seven days/up to 2,000 events are saved in this browser,
+with optional operator initials and CSV export. The log does not reconstruct events
+while the browser was closed and is not a shared or authoritative shift log.
+
+Validation includes polygon boundary/edge inclusion, existing stale-source and hold
+release tests, preferred-side table selection, event transitions, future/duplicate
+strike exclusion, and CSV quoting/formula neutralization in
+`tests/operations.test.mjs`.

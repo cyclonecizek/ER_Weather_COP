@@ -1,10 +1,11 @@
-import {validLightningWatch,evaluateLightningWatch,advanceLightningEpisode} from './lightning-watches.mjs';
+import {SITE_WATCHES} from './site-watches.mjs?v=ops-20261020';
+import {validLightningWatch,evaluateLightningWatch,advanceLightningEpisode} from './lightning-watches.mjs?v=ops-20261020';
 import {windAlertSite} from './wind-alerts.mjs';
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const utc=t=>new Date(t).toISOString().slice(11,19)+'Z';
 const countdown=ms=>{const seconds=Math.max(0,Math.ceil(ms/1000));return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;};
-export function initLightningWatches({onRings,onFocus,onPick}){
+export function initLightningWatches({onRings,onFocus,onPick,onChange=()=>{}}){
  let rules=[],feeds={},winds=[],editing=null,sound=false,audio=null,storageError=false;
  const episodes=new Map(),key='er-cop-lightning-watches-v1';
  try{const saved=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(saved))rules=saved.filter(validLightningWatch).slice(0,30);}catch{}
@@ -28,6 +29,7 @@ export function initLightningWatches({onRings,onFocus,onPick}){
   $('lightningAlertPanelText').textContent=visible.map(r=>`${r.rule.name} / ${r.rule.radiusNm} nm: ${describe(r)}${r.gaps.length?' · incomplete coverage':''}${r.ack?' · acknowledged':''}`).join(' | ');
   $('lightningAlertPanel').classList.toggle('active',active.length>0);
   onRings(results,()=>open());
+  onChange(results);
   if(notify)beep();
   $('lightningWatchList').querySelectorAll('button').forEach(b=>b.onclick=open);
   $('lightningRules').querySelectorAll('[data-lightning-action]').forEach(b=>b.onclick=()=>{
@@ -56,11 +58,11 @@ export function initLightningWatches({onRings,onFocus,onPick}){
  $('lightningPick').onclick=()=>{$('lightningWatchesDialog').close();onPick(point=>{if(point){$('lightningLat').value=point.lat.toFixed(5);$('lightningLon').value=point.lng.toFixed(5);$('lightningSite').value='';}$('lightningWatchesDialog').showModal();});};
  $('lightningSound').onclick=async()=>{if(sound){sound=false;$('lightningSound').textContent='Enable sound';return;}try{const Audio=window.AudioContext||window.webkitAudioContext;audio=audio||new Audio();await audio.resume();sound=true;$('lightningSound').textContent='Sound on · mute';beep();}catch{$('lightningSound').textContent='Sound unavailable';}};
  $('lightningForm').onsubmit=e=>{
-  e.preventDefault();const old=rules.find(r=>r.id===editing),rule={id:editing||crypto.randomUUID(),name:$('lightningName').value.trim(),lat:Number($('lightningLat').value),lon:Number($('lightningLon').value),radiusNm:Number($('lightningRadius').value),holdMinutes:Number($('lightningHold').value),type:$('lightningType').value,color:$('lightningColor').value,enabled:old?.enabled??true,showRing:old?.showRing??true};
+  e.preventDefault();const old=rules.find(r=>r.id===editing),rule={id:editing||crypto.randomUUID(),name:$('lightningName').value.trim(),lat:Number($('lightningLat').value),lon:Number($('lightningLon').value),radiusNm:Number($('lightningRadius').value),holdMinutes:Number($('lightningHold').value),type:$('lightningType').value,color:$('lightningColor').value,...(old?.polygon&&old.lat===Number($('lightningLat').value)&&old.lon===Number($('lightningLon').value)&&old.radiusNm===Number($('lightningRadius').value)?{polygon:old.polygon}:{}),enabled:old?.enabled??true,showRing:old?.showRing??true};
   if(!validLightningWatch(rule)||!$('lightningLat').value.trim()||!$('lightningLon').value.trim()){$('lightningFormError').textContent='Enter a name, valid coordinates, a radius above 0 and up to 100 nm, and a hold of 1–60 whole minutes.';return;}
   if(!editing&&rules.length>=30){$('lightningFormError').textContent='Up to 30 watches can be saved. Edit or delete one to add another.';return;}
   if(editing)rules=rules.map(r=>r.id===editing?rule:r);else rules.push(rule);episodes.delete(rule.id);save();reset();render();
  };
  reset();render();
- return {update(next,snapshotFailed=false){winds=next?.feeds?.winds?.rows||[];feeds=next?.feeds||{};if(snapshotFailed)feeds={...feeds,cg:{...feeds.cg,status:'error'},cc:{...feeds.cc,status:'error'}};render();if($('lightningWatchesDialog').open&&$('lightningSite').options.length<2)siteOptions();}};
+ return {open,acknowledge(id){const episode=episodes.get(id);if(episode){episode.ack=true;render();}},addPresets(){const existing=new Set(rules.map(r=>r.id));const added=SITE_WATCHES.filter(r=>!existing.has(r.id)).slice(0,30-rules.length);rules.push(...structuredClone(added));save();render();return added.length+' site watches added; '+rules.length+' total. Preset boundaries and 30-minute holds are editable.';},update(next,snapshotFailed=false){winds=next?.feeds?.winds?.rows||[];feeds=next?.feeds||{};if(snapshotFailed)feeds={...feeds,cg:{...feeds.cg,status:'error'},cc:{...feeds.cc,status:'error'}};render();if($('lightningWatchesDialog').open&&$('lightningSite').options.length<2)siteOptions();}};
 }

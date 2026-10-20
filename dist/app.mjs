@@ -1,8 +1,9 @@
+import {initOperations} from './operations-ui.mjs?v=ops-20261020';
 import {SHARED_CARTO_KEY} from './basemap-config.mjs?v=shared-map-20261019';
 import {BARNES,prepareStations,analyzeBarnes} from './barnes.mjs';
 import {validReplay,replayBounds,replayFrame,advanceFrame} from './replay.mjs';
-import {initLightningWatches} from './lightning-ui.mjs';
-import {initWindAlerts} from './alerts-ui.mjs';
+import {initLightningWatches} from './lightning-ui.mjs?v=ops-20261020';
+import {initWindAlerts} from './alerts-ui.mjs?v=ops-20261020';
 import {DEFAULTS,clean,windSite,selectWinds,selectWindPlots,efmCategory,ccCells,ccDetections,freshAge,ztime,settingsValid,settingsFrom,normalizeDataEndpoint} from './core.mjs?v=cc-mode-20261019';
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -43,17 +44,28 @@ function marker(lat,lon,html,size,kind,record,tooltip){if(!Number.isFinite(lat)|
 function windSvg(direction,speed,color,size=40){let knots=Math.round(speed/5)*5,paths=[],y=-25;while(knots>=50){paths.push(`<path d="M0 ${y} L12 ${y+5} L0 ${y+9}Z" fill="${color}"/>`);knots-=50;y+=10;}while(knots>=10){paths.push(`<path d="M0 ${y} L11 ${y+5}"/>`);knots-=10;y+=5;}if(knots>=5)paths.push(`<path d="M0 ${y} L6 ${y+3}"/>`);return `<svg width="${size}" height="${size}" viewBox="-32 -32 64 64" style="color:${color};stroke-width:1.7" aria-hidden="true"><g transform="rotate(${direction})">${speed<2.5?'<circle cx="0" cy="0" r="3"/>':'<path d="M0 0V-25"/>'+paths.join('')}<circle cx="0" cy="0" r="1.4" fill="${color}"/></g></svg>`;}
 map.createPane('lightningRings');map.getPane('lightningRings').style.zIndex=405;
 const lightningRingLayer=L.layerGroup().addTo(map);let ringSignature='';
+const operations=initOperations({
+ onResize:()=>requestAnimationFrame(()=>map.invalidateSize()),
+ onRingFocus:r=>{map.fitBounds((r.polygon?L.polygon(r.polygon):L.circle([r.lat,r.lon],{radius:r.radiusNm*1852})).getBounds(),{padding:[35,35],maxZoom:13});},
+ onConfigure:kind=>kind==='wind'?windAlerts.open():lightningWatches.open(),
+ onAcknowledge:(kind,id)=>kind==='wind'?windAlerts.acknowledge(id):lightningWatches.acknowledge(id),
+ onPresets:()=>lightningWatches.addPresets(),
+ onSounds:()=>{if(!$('alertSound').textContent.startsWith('Sound on'))$('alertSound').click();if(!$('lightningSound').textContent.startsWith('Sound on'))$('lightningSound').click();},
+ onFocus:(kind,r)=>{if(!Number.isFinite(r.lat)||!Number.isFinite(r.lon))return;settings.layers[kind]=true;if(kind==='winds')settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);inspect(kind,kind==='cc'?{...r,ccPoint:true}:kind==='winds'?{...r,site:windSite(r.tower)}:r);}
+});
 const lightningWatches=initLightningWatches({
+ onChange:results=>operations.lightning(results),
  onRings:(results,onOpen)=>{
   const signature=JSON.stringify(results.map(r=>[r.rule,r.state,r.gaps.length]));if(signature===ringSignature)return;ringSignature=signature;lightningRingLayer.clearLayers();
   for(const result of results){const r=result.rule;if(!r.showRing)continue;
    const color=result.state==='paused'?'#8b9bae':result.gaps.length&&result.state!=='active'?'#e7ba79':result.state==='active'?'#ff675c':r.color;
-   const circle=L.circle([r.lat,r.lon],{pane:'lightningRings',radius:r.radiusNm*1852,color,weight:2,fillColor:color,fillOpacity:result.state==='active'?.07:.015,dashArray:result.gaps.length||result.state==='paused'?'7 6':null});
+   const ringOptions={pane:'lightningRings',color,weight:2,fillColor:color,fillOpacity:result.state==='active'?.07:.015,dashArray:result.gaps.length||result.state==='paused'?'7 6':null};
+   const circle=r.polygon?L.polygon(r.polygon,ringOptions):L.circle([r.lat,r.lon],{...ringOptions,radius:r.radiusNm*1852});
    circle.bindTooltip(esc(`${r.name} · ${r.radiusNm} nm · ${r.type.toUpperCase()} · ${r.holdMinutes} min hold`),{sticky:true});circle.on('click',onOpen);lightningRingLayer.addLayer(circle);
    const center=L.circleMarker([r.lat,r.lon],{pane:'lightningRings',radius:3,color,weight:2,fillColor:color,fillOpacity:1});center.bindTooltip(esc(r.name));center.on('click',onOpen);lightningRingLayer.addLayer(center);
   }
  },
- onFocus:r=>map.fitBounds(L.circle([r.lat,r.lon],{radius:r.radiusNm*1852}).getBounds(),{padding:[50,70],maxZoom:13}),
+ onFocus:r=>map.fitBounds((r.polygon?L.polygon(r.polygon):L.circle([r.lat,r.lon],{radius:r.radiusNm*1852})).getBounds(),{padding:[50,70],maxZoom:13}),
  onPick:done=>{
   $('lightningPickHint').hidden=false;map.getContainer().style.cursor='crosshair';$('sidebar').classList.remove('open');
   function finish(point){map.getContainer().removeEventListener('click',pick,true);document.removeEventListener('keydown',cancel);$('lightningPickHint').hidden=true;map.getContainer().style.cursor='';done(point);}
@@ -62,8 +74,8 @@ const lightningWatches=initLightningWatches({
   map.getContainer().addEventListener('click',pick,true);document.addEventListener('keydown',cancel);$('lightningPickCancel').onclick=()=>finish(null);
  }
 });
-const windAlerts=initWindAlerts({onFocus:r=>{goLive();settings.layers.winds=true;settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);const plot=selectWindPlots(feed('winds').rows,settings.height,settings.thermo).find(x=>x.site===windSite(r.tower));if(plot)inspect('winds',plot);}});
-function render(){if(!data)return;displaySnapshot=replayTime===null?data:replayFrame(replayHistory,replayTime,settings.trail,replayUrl);if(replayTime!==null&&replayImageFailures.has(displaySnapshot.feeds.radar.image_data)){displaySnapshot.feeds.radar.image_data=null;if(!displaySnapshot.gaps.includes('radar'))displaySnapshot.gaps.push('radar');}lightningWatches.update(data,snapshotFailure);windAlerts.update(snapshotFailure?{...liveFeed('winds'),status:'error'}:liveFeed('winds'));for(const g of Object.values(groups))g.clearLayers();stationIndex=[];const now=mapTime();const winds=selectWindPlots(feed('winds').rows,settings.height,settings.thermo);renderBarnes();$('count-winds').textContent=`${winds.length} sites · ${clockLabel(feed('winds').observed_at)}`;
+const windAlerts=initWindAlerts({onChange:results=>operations.wind(results),onFocus:r=>{goLive();settings.layers.winds=true;settings.height=String(r.hgt);syncControls();save();render();map.setView([r.lat,r.lon],12);const plot=selectWindPlots(feed('winds').rows,settings.height,settings.thermo).find(x=>x.site===windSite(r.tower));if(plot)inspect('winds',plot);}});
+function render(){if(!data)return;displaySnapshot=replayTime===null?data:replayFrame(replayHistory,replayTime,settings.trail,replayUrl);if(replayTime!==null&&replayImageFailures.has(displaySnapshot.feeds.radar.image_data)){displaySnapshot.feeds.radar.image_data=null;if(!displaySnapshot.gaps.includes('radar'))displaySnapshot.gaps.push('radar');}operations.live(data,snapshotFailure);operations.display(displaySnapshot||data,settings,mapTime(),replayTime!==null);lightningWatches.update(data,snapshotFailure);windAlerts.update(snapshotFailure?{...liveFeed('winds'),status:'error'}:liveFeed('winds'));for(const g of Object.values(groups))g.clearLayers();stationIndex=[];const now=mapTime();const winds=selectWindPlots(feed('winds').rows,settings.height,settings.thermo);renderBarnes();$('count-winds').textContent=`${winds.length} sites · ${clockLabel(feed('winds').observed_at)}`;
  for(const r of winds){
   stationIndex.push({name:r.site,kind:'winds',r,lat:r.lat,lon:r.lon});if(!settings.layers.winds)continue;
   const color=settings.basemap==='light'&&settings.windColor===DEFAULTS.windColor?'#223b50':settings.windColor;
@@ -164,7 +176,7 @@ async function refresh(){if(refreshing)return;refreshing=true;$('refresh').disab
  const optgroup=document.createElement('optgroup');optgroup.label='Exact sensor height';
  for(const height of heights){const option=document.createElement('option');option.value=String(height);option.textContent=height+' ft';optgroup.append(option);}
  $('windHeight').append(optgroup);$('windHeight').value=settings.height;
- snapshotFailure=false;lastRefresh=Date.now();render();if(replayHistory)loadReplay(false).catch(()=>{});}catch(error){snapshotFailure=true;lightningWatches.update(data,true);$('mapAlert').hidden=false;$('mapAlert').textContent=data?'Snapshot refresh failed. Retaining last downloaded observations.':'Observations could not load. Use Refresh to try again.';if(data){updateStatus();windAlerts.update({...liveFeed('winds'),status:'error'});}else $('networkStatus').textContent='Unable to connect';}finally{refreshing=false;refreshAt=Date.now()+60000;$('loading').hidden=true;$('refresh').disabled=false;$('refresh').querySelector('span').textContent='Refresh observations';}}
+ snapshotFailure=false;lastRefresh=Date.now();render();if(replayHistory)loadReplay(false).catch(()=>{});}catch(error){snapshotFailure=true;operations.live(data,true);lightningWatches.update(data,true);$('mapAlert').hidden=false;$('mapAlert').textContent=data?'Snapshot refresh failed. Retaining last downloaded observations.':'Observations could not load. Use Refresh to try again.';if(data){updateStatus();windAlerts.update({...liveFeed('winds'),status:'error'});}else $('networkStatus').textContent='Unable to connect';}finally{refreshing=false;refreshAt=Date.now()+60000;$('loading').hidden=true;$('refresh').disabled=false;$('refresh').querySelector('span').textContent='Refresh observations';}}
 function syncControls(){for(const key of Object.keys(LABELS))$('layer-'+key).checked=settings.layers[key];$('windHeight').value=settings.height;$('gusts').checked=settings.gusts;$('labels').checked=settings.labels;$('trail').value=settings.trail;$('trailLabel').textContent=settings.trail+' min';$('windOptions').hidden=!settings.layers.winds;$('ccOptions').hidden=!settings.layers.cc;$('ccMode').value=settings.ccMode;for(const key of ['tmp','dp','rh'])$('show-'+key).checked=settings.thermo[key];$('radarOptions').hidden=!settings.layers.radar;$('radarOpacity').value=Math.round(settings.radarOpacity*100);$('radarOpacityLabel').textContent=Math.round(settings.radarOpacity*100)+'%';}
 for(const key of Object.keys(LABELS))$('layer-'+key).addEventListener('change',e=>{settings.layers[key]=e.target.checked;syncControls();save();render();});
 $('allOff').onclick=()=>{for(const k in settings.layers)settings.layers[k]=false;syncControls();save();render();};

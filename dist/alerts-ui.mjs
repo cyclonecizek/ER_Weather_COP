@@ -1,7 +1,7 @@
 import {WIND_METRICS,validWindRule,evaluateWindRule,advanceWindEpisode,windAlertSite} from './wind-alerts.mjs';
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=id=>document.getElementById(id);
-export function initWindAlerts({onFocus}){
+export function initWindAlerts({onFocus,onChange=()=>{}}){
  const storageKey='er-cop-wind-alerts-v1';let rules=[],feed=null,editing=null,audio=null,sound=false,storageError=false;
  const episodes=new Map();
  try{const saved=JSON.parse(localStorage.getItem(storageKey)||'[]');if(Array.isArray(saved))rules=saved.filter(validWindRule).slice(0,20);}catch{}
@@ -28,6 +28,7 @@ export function initWindAlerts({onFocus}){
   $('windAlertPanel').hidden=visible.length===0;
   $('windAlertPanelText').textContent=visible.map(r=>r.state==='active'?`${r.rule.name}: ${r.hits.map(h=>`${h.site} / ${h.hgt} ft / ${h.value} kt`).join('; ')}${episodes.get(r.rule.id).ack?' (acknowledged)':''}${r.gaps.length?' · incomplete coverage':''}`:`${r.rule.name}: monitoring gap${episodes.get(r.rule.id).active?' · previous alert not cleared':''}`).join(' | ');
   $('windAlertPanel').classList.toggle('active',active>0);
+  onChange(results.map(r=>({...r,ack:episodes.get(r.rule.id).ack,latched:episodes.get(r.rule.id).active})));
   if(notify)beep();
   $('windAlertRules').querySelectorAll('[data-rule-action]').forEach(b=>b.onclick=()=>{
    const rule=rules.find(r=>r.id===b.dataset.id);if(!rule)return;
@@ -55,5 +56,5 @@ export function initWindAlerts({onFocus}){
   episodes.delete(rule.id);save();reset();render();
  };
  reset();render();
- return {update(next){feed=next;render();if($('windAlertsDialog').open&&!$('alertTowers').querySelector('input'))towerOptions();}};
+ return {open,acknowledge(id){const episode=episodes.get(id);if(episode){episode.ack=true;render();}},update(next){feed=next;render();if($('windAlertsDialog').open&&!$('alertTowers').querySelector('input'))towerOptions();}};
 }

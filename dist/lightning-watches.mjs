@@ -17,12 +17,24 @@ export function distanceNm(lat1,lon1,lat2,lon2){
  const h=Math.sin(a/2)**2+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(b/2)**2;
  return 6371.0088/1.852*2*Math.atan2(Math.sqrt(Math.min(1,h)),Math.sqrt(Math.max(0,1-h)));
 }
-export function validLightningWatch(r){return !!r&&typeof r.id==='string'&&r.id.length>0&&r.id.length<=100&&typeof r.name==='string'&&r.name.trim().length>0&&r.name.length<=80&&Number.isFinite(r.lat)&&r.lat>=-90&&r.lat<=90&&Number.isFinite(r.lon)&&r.lon>=-180&&r.lon<=180&&Number.isFinite(r.radiusNm)&&r.radiusNm>0&&r.radiusNm<=100&&Number.isInteger(r.holdMinutes)&&r.holdMinutes>=1&&r.holdMinutes<=60&&['cg','cc','both'].includes(r.type)&&typeof r.enabled==='boolean'&&typeof r.showRing==='boolean'&&/^#[0-9a-f]{6}$/i.test(r.color);}
+const polygonBounds=new WeakMap();
+export function insideWatch(rule,lat,lon){
+ if(!rule.polygon)return distanceNm(rule.lat,rule.lon,lat,lon)<=rule.radiusNm+1e-8;
+ let inside=false;const p=rule.polygon;let bounds=polygonBounds.get(p);if(!bounds){bounds=p.reduce((b,v)=>[Math.min(b[0],v[0]),Math.max(b[1],v[0]),Math.min(b[2],v[1]),Math.max(b[3],v[1])],[90,-90,180,-180]);polygonBounds.set(p,bounds);}if(lat<bounds[0]-1e-8||lat>bounds[1]+1e-8||lon<bounds[2]-1e-8||lon>bounds[3]+1e-8)return false;
+ for(let i=0,j=p.length-1;i<p.length;j=i++){
+  const [ay,ax]=p[j],[by,bx]=p[i],dx=bx-ax,dy=by-ay,den=dx*dx+dy*dy;
+  const t=den?Math.max(0,Math.min(1,((lon-ax)*dx+(lat-ay)*dy)/den)):0;
+  if(Math.hypot(lon-ax-t*dx,lat-ay-t*dy)<1e-8)return true;
+  if((ay>lat)!==(by>lat)&&lon<(bx-ax)*(lat-ay)/(by-ay)+ax)inside=!inside;
+ }return inside;
+}
+function validPolygon(p){return p===undefined||Array.isArray(p)&&p.length>=3&&p.length<=1000&&p.every(v=>Array.isArray(v)&&v.length===2&&Number.isFinite(v[0])&&Math.abs(v[0])<=90&&Number.isFinite(v[1])&&Math.abs(v[1])<=180);}
+export function validLightningWatch(r){return !!r&&validPolygon(r.polygon)&&typeof r.id==='string'&&r.id.length>0&&r.id.length<=100&&typeof r.name==='string'&&r.name.trim().length>0&&r.name.length<=80&&Number.isFinite(r.lat)&&r.lat>=-90&&r.lat<=90&&Number.isFinite(r.lon)&&r.lon>=-180&&r.lon<=180&&Number.isFinite(r.radiusNm)&&r.radiusNm>0&&r.radiusNm<=100&&Number.isInteger(r.holdMinutes)&&r.holdMinutes>=1&&r.holdMinutes<=60&&['cg','cc','both'].includes(r.type)&&typeof r.enabled==='boolean'&&typeof r.showRing==='boolean'&&/^#[0-9a-f]{6}$/i.test(r.color);}
 export function evaluateLightningWatch(rule,feeds,now=Date.now(),previousEvent=null){
  if(!rule.enabled)return {state:'paused',event:null,count:0,gaps:[],remainingMs:0};
  const types=rule.type==='both'?['cg','cc']:[rule.type],gaps=[],events=new Map();
  const cutoff=now-rule.holdMinutes*MIN;
- let latest=previousEvent&&types.includes(previousEvent.type)&&previousEvent.time<=now&&distanceNm(rule.lat,rule.lon,previousEvent.lat,previousEvent.lon)<=rule.radiusNm+1e-8?previousEvent:null;
+ let latest=previousEvent&&types.includes(previousEvent.type)&&previousEvent.time<=now&&insideWatch(rule,previousEvent.lat,previousEvent.lon)?previousEvent:null;
  let through=Infinity;
  for(const type of types){
   const f=feeds?.[type],end=time(f?.window_end),start=time(f?.window_start),fetched=time(f?.fetched_at);
@@ -32,8 +44,8 @@ export function evaluateLightningWatch(rule,feeds,now=Date.now(),previousEvent=n
   const normalized=normalizedRows(f?.rows);
   for(const r of normalized.events){
    const {time:t,lat,lon}=r;
-   if(t>now||t<cutoff||Math.abs(lat-rule.lat)>rule.radiusNm/59)continue;
-   const distance=distanceNm(rule.lat,rule.lon,lat,lon);if(distance>rule.radiusNm+1e-8)continue;
+   if(t>now||t<cutoff)continue;
+   const distance=distanceNm(rule.lat,rule.lon,lat,lon);if(!insideWatch(rule,lat,lon))continue;
    const event={time:t,lat,lon,type,distanceNm:distance};
    events.set(`${type}:${r.id??`${t}:${lat}:${lon}`}`,event);
    if(!latest||t>latest.time)latest=event;
