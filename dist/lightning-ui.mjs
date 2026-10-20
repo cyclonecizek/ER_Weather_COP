@@ -28,7 +28,9 @@ export function initLightningWatches({onRings,onFocus,onPick,onChange=()=>{}}){
   $('lightningAlertPanel').hidden=!visible.length;
   $('lightningAlertPanelText').textContent=visible.map(r=>`${r.rule.name} / ${r.rule.radiusNm} nm: ${describe(r)}${r.gaps.length?' · incomplete coverage':''}${r.ack?' · acknowledged':''}`).join(' | ');
   $('lightningAlertPanel').classList.toggle('active',active.length>0);
-  onRings(results,()=>open());
+  const configured=new Set(rules.map(r=>r.id));
+  const previews=SITE_WATCHES.filter(r=>!configured.has(r.id)).map(rule=>({rule,state:'preview',gaps:[],preview:true}));
+  onRings([...results,...previews],()=>open());
   onChange(results);
   if(notify)beep();
   $('lightningWatchList').querySelectorAll('button').forEach(b=>b.onclick=open);
